@@ -14,9 +14,12 @@ import yfinance as yf  # Added for Yahoo Finance integration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - Gnews API instead of NewsAPI
+# Configuration - Gnews API and NewsData.io as fallback
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
-GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Using your provided Gnews API Key
+GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your Gnews API Key
+NEWSDATA_API_URL = "https://newsdata.io/api/1/news"
+NEWSDATA_API_KEY = "pub_8684512de957559ac735ec05209d0f3c52303"  # Your NewsData.io API Key
+
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
@@ -109,6 +112,7 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
     Fetch news articles from Gnews API related to the given query
     """
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
+        logger.error("Invalid Gnews API key. Please set a valid API key.")
         st.error("Invalid Gnews API key. Please set a valid API key.")
         return []
     
@@ -116,33 +120,35 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
     week_ago = today - timedelta(days=days_back)
     from_date = week_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
     
-    st.info(f"Fetching news for query '{query}' from the past {days_back} days")
+    st.info(f"Fetching news for query '{query}' from the past {days_back} days using GNews")
     
     for attempt in range(retries):
         try:
             params = {
-                "q": query,  # Search query
+                "q": query,
                 "apikey": GNEWS_API_KEY,
                 "lang": "en",
-                "country": "us",  # Can be changed to get news from different countries
-                "max": min(max_records, 100),  # Gnews free plan limits to 100 articles
+                "country": "us",
+                "max": min(max_records, 100),
                 "from": from_date
             }
+            logger.info(f"Sending GNews request with params: {params}")
             response = requests.get(GNEWS_API_URL, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
+            logger.info(f"GNews response: {data}")
             
-            # Check for error responses
             if "errors" in data:
+                logger.error(f"Gnews API error: {data['errors']}")
                 st.error(f"Gnews API error: {data['errors']}")
                 return []
                 
             articles = data.get("articles", [])
             if not articles:
+                logger.warning(f"No articles found for query '{query}'.")
                 st.warning(f"No articles found for query '{query}'. Try broadening the query.")
                 return []
                 
-            # Process articles into the same format as before
             return [
                 {
                     "title": a.get("title", "No title"),
@@ -151,30 +157,122 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
                     "published_at": a.get("publishedAt", ""),
                     "description": a.get("description", "") or "No description available",
                     "image_url": a.get("image", ""),
-                    "translated_title": "",  # Placeholder for translation
-                    "translated_description": "",  # Placeholder for translation
-                    "stock_price": None  # Placeholder for stock price
+                    "translated_title": "",
+                    "translated_description": "",
+                    "stock_price": None
                 }
                 for a in articles
             ]
             
         except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTPError in GNews: {str(e)}")
             if e.response.status_code == 429:
                 sleep_time = backoff_factor * (2 ** attempt)
+                logger.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
                 st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
                 time.sleep(sleep_time)
             elif e.response.status_code == 401:
+                logger.error("Unauthorized: Invalid Gnews API key.")
                 st.error("Unauthorized: Invalid Gnews API key. Please check or replace the key.")
                 return []
             else:
                 st.error(f"Failed to fetch Gnews: {e}")
                 return []
         except Exception as e:
+            logger.error(f"Unexpected error in GNews: {str(e)}")
             st.error(f"Failed to fetch Gnews: {e}")
             return []
             
+    logger.error(f"Failed to fetch Gnews after {retries} attempts")
     st.error(f"Failed to fetch Gnews after {retries} attempts")
     return []
+
+# Fallback: Fetch news from NewsData.io
+def fetch_newsdata(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+    """
+    Fetch news articles from NewsData.io API as a fallback
+    """
+    if not NEWSDATA_API_KEY or NEWSDATA_API_KEY == "pub_8684512de957559ac735ec05209d0f3c52303":
+        logger.error("Invalid NewsData.io API key. Please set a valid API key.")
+        st.error("Invalid NewsData.io API key. Please set a valid API key.")
+        return []
+    
+    st.info(f"Fetching news for query '{query}' from the past {days_back} days using NewsData.io")
+    
+    for attempt in range(retries):
+        try:
+            params = {
+                "q": query,
+                "apikey": NEWSDATA_API_KEY,
+                "language": "en",
+                "country": "us",
+                "page_size": min(max_records, 50)  # NewsData.io free plan limit
+            }
+            logger.info(f"Sending NewsData.io request with params: {params}")
+            response = requests.get(NEWSDATA_API_URL, params=params, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            logger.info(f"NewsData.io response: {data}")
+            
+            if data.get("status") != "success":
+                logger.error(f"NewsData.io API error: {data.get('message', 'Unknown error')}")
+                st.error(f"NewsData.io API error: {data.get('message', 'Unknown error')}")
+                return []
+                
+            articles = data.get("results", [])
+            if not articles:
+                logger.warning(f"No articles found for query '{query}'.")
+                st.warning(f"No articles found for query '{query}'. Try broadening the query.")
+                return []
+                
+            return [
+                {
+                    "title": a.get("title", "No title"),
+                    "url": a.get("link", ""),
+                    "source": a.get("source_id", "Unknown Source"),
+                    "published_at": a.get("pubDate", ""),
+                    "description": a.get("description", "") or "No description available",
+                    "image_url": a.get("image_url", ""),
+                    "translated_title": "",
+                    "translated_description": "",
+                    "stock_price": None
+                }
+                for a in articles
+            ]
+            
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"HTTPError in NewsData.io: {str(e)}")
+            if e.response.status_code == 429:
+                sleep_time = backoff_factor * (2 ** attempt)
+                logger.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
+                st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
+                time.sleep(sleep_time)
+            elif e.response.status_code == 401:
+                logger.error("Unauthorized: Invalid NewsData.io API key.")
+                st.error("Unauthorized: Invalid NewsData.io API key. Please check or replace the key.")
+                return []
+            else:
+                st.error(f"Failed to fetch NewsData.io: {e}")
+                return []
+        except Exception as e:
+            logger.error(f"Unexpected error in NewsData.io: {str(e)}")
+            st.error(f"Failed to fetch NewsData.io: {e}")
+            return []
+            
+    logger.error(f"Failed to fetch NewsData.io after {retries} attempts")
+    st.error(f"Failed to fetch NewsData.io after {retries} attempts")
+    return []
+
+# Wrapper function to try GNews first, then NewsData.io
+def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+    """
+    Try fetching news from GNews, fall back to NewsData.io if it fails
+    """
+    articles = fetch_gnews(query, max_records, days_back, retries, backoff_factor)
+    if articles:
+        return articles
+    logger.info("Falling back to NewsData.io API")
+    return fetch_newsdata(query, max_records, days_back, retries, backoff_factor)
 
 # Function to convert UTC time to Tehran time
 def convert_to_tehran_time(utc_time_str):
@@ -481,7 +579,7 @@ def main():
         st.header("Query Settings")
         query = st.text_input("Search Query", value="Iran", key="search_query").strip()
         days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7, key="days_back")
-        max_articles = st.slider("Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
+        max_articles = st.slider("Maximum number of articles", min_value=5, max_value100, value=20, key="max_articles")
         
         # Add search button
         search_button = st.button("Search for News")
@@ -519,7 +617,7 @@ def main():
     # Execute search when button is clicked
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
-            articles = fetch_gnews(query=query, max_records=max_articles, days_back=days_back)
+            articles = fetch_news(query=query, max_records=max_articles, days_back=days_back)
             if articles:
                 articles = pre_process_articles(articles)  # Pre-translate and fetch stock prices
                 st.session_state.articles = articles
