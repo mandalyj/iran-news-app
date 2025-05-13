@@ -19,12 +19,14 @@ GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Using your provided Gnews API Key
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-# MyMemory Translation API endpoint
-MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
 
 # Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
+
+# Hugging Face API configuration for DeepSeek
+HUGGINGFACE_API_TOKEN = "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"  # Your Hugging Face API token
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/deepseek-ai/deepseek-v2"
 
 # Initialize Streamlit page with custom CSS
 st.set_page_config(
@@ -184,36 +186,33 @@ def convert_to_tehran_time(utc_time_str):
         logger.warning(f"Error converting time: {str(e)}")
         return utc_time_str
 
-# Function to translate text using MyMemory Translation API
+# Function to translate text using DeepSeek via Hugging Face API
 def translate_text(text, target_lang="fa"):
     """
-    Translate text to target language using MyMemory Translation API
+    Translate text to target language using DeepSeek via Hugging Face API
     """
     if not text or len(text.strip()) < 1:
         return ""
     
-    prefixes = {"us": "آمریکا", "iran": "ایران", "nuclear": "هسته‌ای", "talks": "مذاکرات", "news": "اخبار", "israel": "اسرائیل", "russia": "روسیه", "china": "چین"}
-    fallback_translated = text
-    for eng, fa in prefixes.items():
-        fallback_translated = fallback_translated.replace(eng.lower(), f"{eng}({fa})")
-    fallback_translated = f"{fallback_translated} - ترجمه به فارسی"
-
+    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
+    prompt = f"Translate this text to Persian: {text}"
+    data = {
+        "inputs": prompt,
+        "parameters": {"max_length": 200}
+    }
+    
     try:
-        params = {"q": text, "langpair": f"en|{target_lang}"}
-        response = requests.get(MYMEMORY_API_URL, params=params, timeout=10)
+        response = requests.post(HUGGINGFACE_API_URL, headers=headers, json=data, timeout=10)
         response.raise_for_status()
-        data = response.json()
-        if data.get("responseStatus") == 200 and data.get("responseData", {}).get("translatedText"):
-            translated = data["responseData"]["translatedText"].replace("IR ", "").strip()
-            return translated
-        logger.warning("Translation API returned unexpected response")
-        return fallback_translated
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Error translating text with MyMemory: {str(e)}")
-        return fallback_translated
+        result = response.json()
+        if isinstance(result, list) and len(result) > 0:
+            translated = result[0].get("generated_text", "")
+            # Remove the prompt part from the response
+            return translated.replace(prompt, "").strip()
+        return f"{text} - ترجمه نشد"
     except Exception as e:
-        logger.warning(f"Unexpected error translating text: {str(e)}")
-        return fallback_translated
+        logger.warning(f"Error translating with DeepSeek: {str(e)}")
+        return f"{text} - ترجمه نشد"
 
 # Function to fetch stock price using yfinance
 def fetch_stock_price(company_name):
