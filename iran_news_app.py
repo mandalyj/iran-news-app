@@ -287,7 +287,7 @@ def get_chat_id_from_username(username, chat_ids):
                     return chat_id, None
                 # Check if it's a group with the username
                 if chat.get("type") == "group" or chat.get("type") == "supergroup":
-                    if chat.get("title", "").lower().find(username) != -1:
+                    if chat.get("title", "").lower().find(username.lower()) != -1:
                         chat_id = chat["id"]
                         chat_ids[username] = chat_id
                         save_chat_ids(chat_ids)
@@ -537,12 +537,11 @@ def main():
                         # If the input starts with @, try to resolve username to Chat ID
                         if target_chat_id.startswith("@"):
                             chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
-                            if chat_id is not None:
-                                target_chat_id = chat_id
-                            else:
+                            if chat_id is None:
                                 st.error(f"Failed to resolve username: {error}")
                                 fail_count = len(st.session_state.selected_articles)  # Mark all as failed
-                                break
+                            else:
+                                target_chat_id = chat_id
                         
                         # Debug: Show the target chat ID and message
                         st.info(f"Sending to Chat ID: {target_chat_id}")
