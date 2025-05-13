@@ -377,9 +377,11 @@ def send_telegram_message(chat_id, message, disable_web_page_preview=False):
 def main():
     st.title("Iran News Aggregator")
     
-    # Initialize session state for selected articles
+    # Initialize session state for selected articles and articles
     if 'selected_articles' not in st.session_state:
         st.session_state.selected_articles = []
+    if 'articles' not in st.session_state:
+        st.session_state.articles = []
     
     # Sidebar for queries and filters
     with st.sidebar:
@@ -408,17 +410,18 @@ def main():
                 days_back=days_back
             )
             
-            # Store articles in session state for download
+            # Store articles in session state
             st.session_state.articles = articles
             
             # Reset selected articles when new search is performed
             st.session_state.selected_articles = []
-            
-            # Display the articles with translations
-            display_news_articles(articles)
+    
+    # Always display articles if they exist in session state
+    if st.session_state.articles:
+        display_news_articles(st.session_state.articles)
     
     # Download section in the sidebar
-    if 'articles' in st.session_state and st.session_state.articles:
+    if st.session_state.articles:
         with st.sidebar:
             if download_format == "CSV":
                 csv_data = save_articles_to_file(st.session_state.articles, format="csv")
