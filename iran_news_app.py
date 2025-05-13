@@ -21,6 +21,9 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # MyMemory Translation API endpoint
 MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
 
+# Temporary file to store articles
+TEMP_FILE = "/tmp/iran_news_articles.json"
+
 # Initialize Streamlit page with custom CSS
 st.set_page_config(
     page_title="Iran News Aggregator",
@@ -54,6 +57,25 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+# Load articles from temp file if exists
+def load_articles_from_file():
+    try:
+        if os.path.exists(TEMP_FILE):
+            with open(TEMP_FILE, "r") as f:
+                return json.load(f)
+        return []
+    except Exception as e:
+        logger.warning(f"Error loading articles from file: {str(e)}")
+        return []
+
+# Save articles to temp file
+def save_articles_to_file(articles):
+    try:
+        with open(TEMP_FILE, "w") as f:
+            json.dump(articles, f)
+    except Exception as e:
+        logger.warning(f"Error saving articles to file: {str(e)}")
 
 # Step 1: Fetch news from Gnews API
 def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
@@ -129,74 +151,39 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
 def convert_to_tehran_time(utc_time_str):
     """
     Convert UTC time string to Tehran time (UTC+3:30)
-    
-    Args:
-        utc_time_str: UTC time string in format 'YYYY-MM-DDThh:mm:ssZ'
-        
-    Returns:
-        Formatted Tehran time string
     """
     try:
-        # Parse the UTC time string
         utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
-        
-        # Add 3 hours and 30 minutes for Tehran time (UTC+3:30)
         tehran_time = utc_time + timedelta(hours=3, minutes=30)
-        
-        # Format the time as a readable string in Persian
         return tehran_time.strftime("%Y/%m/%d - %H:%M")
     except Exception as e:
         logger.warning(f"Error converting time: {str(e)}")
-        return utc_time_str  # Return original time if conversion fails
+        return utc_time_str
 
 # Function to translate text using MyMemory Translation API
 def translate_text(text, target_lang="fa"):
     """
     Translate text to target language using MyMemory Translation API
-    
-    Args:
-        text: Text to translate
-        target_lang: Target language code (default: 'fa' for Persian)
-        
-    Returns:
-        Translated text or fallback translation on failure
     """
     if not text or len(text.strip()) < 1:
         return ""
     
-    # Fallback translation in case API fails
-    prefixes = {
-        "us": "آمریکا",
-        "iran": "ایران",
-        "nuclear": "هسته‌ای",
-        "talks": "مذاکرات",
-        "news": "اخبار",
-        "israel": "اسرائیل",
-        "russia": "روسیه",
-        "china": "چین"
-    }
+    prefixes = {"us": "آمریکا", "iran": "ایران", "nuclear": "هسته‌ای", "talks": "مذاکرات", "news": "اخبار", "israel": "اسرائیل", "russia": "روسیه", "china": "چین"}
     fallback_translated = text
     for eng, fa in prefixes.items():
         fallback_translated = fallback_translated.replace(eng.lower(), f"{eng}({fa})")
     fallback_translated = f"{fallback_translated} - ترجمه به فارسی"
 
     try:
-        params = {
-            "q": text,
-            "langpair": f"en|{target_lang}"
-        }
+        params = {"q": text, "langpair": f"en|{target_lang}"}
         response = requests.get(MYMEMORY_API_URL, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
         if data.get("responseStatus") == 200 and data.get("responseData", {}).get("translatedText"):
-            translated = data["responseData"]["translatedText"]
-            # Remove "IR" if it appears at the start
-            translated = translated.replace("IR ", "").strip()
+            translated = data["responseData"]["translatedText"].replace("IR ", "").strip()
             return translated
-        else:
-            logger.warning("Translation API returned unexpected response")
-            return fallback_translated
+        logger.warning("Translation API returned unexpected response")
+        return fallback_translated
     except requests.exceptions.RequestException as e:
         logger.warning(f"Error translating text with MyMemory: {str(e)}")
         return fallback_translated
@@ -211,12 +198,9 @@ def display_news_articles(articles):
         st.warning("No news articles to display")
         return
         
-    # Display statistics
     st.subheader("News Statistics")
     sources = pd.DataFrame([article["source"] for article in articles]).value_counts().reset_index()
     sources.columns = ["Source", "Count"]
-    
-    # Only show stats if we have more than one source
     if len(sources) > 1:
         col1, col2 = st.columns(2)
         with col1:
@@ -226,148 +210,93 @@ def display_news_articles(articles):
     else:
         st.write(f"All articles from: {sources.iloc[0, 0]}")
     
-    # Show selection status
     st.subheader("Selected Articles")
     selected_count = len(st.session_state.selected_articles)
     st.write(f"You have selected {selected_count} article(s) to send to Telegram")
     
-    # Show articles in a grid layout with 2 columns
     st.subheader("News Articles")
-    
-    # Create rows of articles (2 per row)
     for i in range(0, len(articles), 2):
         cols = st.columns(2)
-        
-        # First article in the row
         with cols[0]:
             article = articles[i]
-            
-            # Check if this article is already selected
             is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
-            
-            # Create a unique key for this article's checkbox
             checkbox_key = f"article_{i}"
-            
-            # Add checkbox for selection
             if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-                # Add to selected if not already there
                 if not is_selected:
                     st.session_state.selected_articles.append(article)
             else:
-                # Remove from selected if it was there
                 if is_selected:
-                    st.session_state.selected_articles = [a for a in st.session_state.selected_articles 
-                                                         if a.get('url') != article['url']]
-            
-            # Translate title and description
+                    st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
             with st.spinner(f"Translating: {article['title'][:30]}..."):
                 translated_title = translate_text(article["title"])
                 translated_description = translate_text(article["description"])
-            
-            # Convert published time to Tehran time
             tehran_time = convert_to_tehran_time(article["published_at"])
-            
-            # Display article with translation
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
             st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
-            
             if article["image_url"]:
                 try:
                     st.image(article["image_url"], use_column_width=True)
                 except:
                     st.info("Image could not be loaded")
-            
             st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
             st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Second article in the row (if available)
         if i + 1 < len(articles):
             with cols[1]:
                 article = articles[i + 1]
-                
-                # Check if this article is already selected
                 is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
-                
-                # Create a unique key for this article's checkbox
                 checkbox_key = f"article_{i+1}"
-                
-                # Add checkbox for selection
                 if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-                    # Add to selected if not already there
                     if not is_selected:
                         st.session_state.selected_articles.append(article)
                 else:
-                    # Remove from selected if it was there
                     if is_selected:
-                        st.session_state.selected_articles = [a for a in st.session_state.selected_articles 
-                                                             if a.get('url') != article['url']]
-                
-                # Translate title and description
+                        st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
                 with st.spinner(f"Translating: {article['title'][:30]}..."):
                     translated_title = translate_text(article["title"])
                     translated_description = translate_text(article["description"])
-                
-                # Convert published time to Tehran time
                 tehran_time = convert_to_tehran_time(article["published_at"])
-                
-                # Display article with translation
                 st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                 st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
                 st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
-                
                 if article["image_url"]:
                     try:
                         st.image(article["image_url"], use_column_width=True)
                     except:
                         st.info("Image could not be loaded")
-                
                 st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
                 st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
-# Function to save articles to a file
-def save_articles_to_file(articles, format="csv"):
-    """Save articles to a file in the specified format"""
+# Function to save articles to a file for download
+def save_articles_to_file_for_download(articles, format="csv"):
     if not articles:
         return None
-        
     df = pd.DataFrame(articles)
-    
     if format == "csv":
         buffer = BytesIO()
         df.to_csv(buffer, index=False)
         return buffer.getvalue()
     elif format == "json":
         return json.dumps(articles, indent=2)
-    else:
-        return None
+    return None
 
 # Function to send a message to Telegram
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
-    """Send a message to a Telegram chat using the Telegram Bot API"""
     try:
         url = f"{TELEGRAM_API_URL}/sendMessage"
-        data = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "Markdown",
-            "disable_web_page_preview": disable_web_page_preview
-        }
+        data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
         response = requests.post(url, data=data, timeout=10)
         response.raise_for_status()
-        
         result = response.json()
         if result.get("ok"):
             return True, "Message sent successfully"
-        else:
-            return False, f"Error: {result.get('description', 'Unknown error')}"
-    
+        return False, f"Error: {result.get('description', 'Unknown error')}"
     except requests.exceptions.RequestException as e:
         return False, f"Error sending message: {str(e)}"
     except Exception as e:
@@ -381,11 +310,11 @@ def main():
     if 'selected_articles' not in st.session_state:
         st.session_state.selected_articles = []
     if 'articles' not in st.session_state:
-        st.session_state.articles = []
+        st.session_state.articles = load_articles_from_file()  # Load from file if exists
     
     # Debug: Log the state to see if articles are being cleared
     if not st.session_state.articles:
-        st.info("No articles in session state. Please search for news.")
+        st.info("No articles in session state. Please search for news or check if data was loaded from file.")
     else:
         st.info(f"Found {len(st.session_state.articles)} articles in session state.")
     
@@ -414,19 +343,16 @@ def main():
     if clear_button:
         st.session_state.articles = []
         st.session_state.selected_articles = []
+        if os.path.exists(TEMP_FILE):
+            os.remove(TEMP_FILE)
         st.experimental_rerun()  # Force a rerun to refresh the page
     
     # Execute search when button is clicked
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
-            articles = fetch_gnews(
-                query=query,
-                max_records=max_articles,
-                days_back=days_back
-            )
-            
-            # Store articles in session state
+            articles = fetch_gnews(query=query, max_records=max_articles, days_back=days_back)
             st.session_state.articles = articles
+            save_articles_to_file(articles)  # Save to temp file
             st.session_state.selected_articles = []
     
     # Always display articles if they exist in session state
@@ -437,18 +363,18 @@ def main():
     if st.session_state.articles:
         with st.sidebar:
             if download_format == "CSV":
-                csv_data = save_articles_to_file(st.session_state.articles, format="csv")
+                csv_data = save_articles_to_file_for_download(st.session_state.articles, format="csv")
                 st.download_button(
                     label="Download as CSV",
-                    data=csv_data if csv_data else b"",  # Use binary empty string
+                    data=csv_data if csv_data else b"",
                     file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
             else:  # JSON
-                json_data = save_articles_to_file(st.session_state.articles, format="json")
+                json_data = save_articles_to_file_for_download(st.session_state.articles, format="json")
                 st.download_button(
                     label="Download as JSON",
-                    data=json_data if json_data else b"",  # Use binary empty string
+                    data=json_data if json_data else b"",
                     file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json",
                     mime="application/json"
                 )
@@ -459,23 +385,15 @@ def main():
                     with st.spinner("Sending to Telegram..."):
                         success_count = 0
                         fail_count = 0
-                        
                         for article in st.session_state.selected_articles:
-                            # Since translations are already shown, we just send the English version
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
-                            
-                            # Send to Telegram
                             success, result = send_telegram_message(telegram_chat_id, message, disable_web_page_preview=False)
-                            
                             if success:
                                 success_count += 1
                             else:
                                 fail_count += 1
                                 st.error(f"Failed to send: {article['title']} - {result}")
-                            
-                            # Add a small delay to avoid rate limiting
                             time.sleep(1)
-                        
                         if success_count > 0:
                             st.success(f"Successfully sent {success_count} article(s) to Telegram")
                         if fail_count > 0:
