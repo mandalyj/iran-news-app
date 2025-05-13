@@ -28,6 +28,9 @@ CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
 HUGGINGFACE_API_TOKEN = "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"  # Your Hugging Face API token
 HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/deepseek-ai/deepseek-v2"
 
+# LibreTranslate API (public instance for testing)
+LIBRETRANSLATE_API_URL = "https://libretranslate.de/translate"
+
 # Initialize Streamlit page with custom CSS
 st.set_page_config(
     page_title="Iran News Aggregator",
@@ -186,14 +189,15 @@ def convert_to_tehran_time(utc_time_str):
         logger.warning(f"Error converting time: {str(e)}")
         return utc_time_str
 
-# Function to translate text using DeepSeek via Hugging Face API
+# Function to translate text using DeepSeek via Hugging Face API or LibreTranslate as fallback
 def translate_text(text, target_lang="fa"):
     """
-    Translate text to target language using DeepSeek via Hugging Face API
+    Translate text to target language using DeepSeek via Hugging Face API or LibreTranslate as fallback
     """
     if not text or len(text.strip()) < 1:
         return ""
     
+    # First attempt: Try DeepSeek via Hugging Face API
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
     prompt = f"Translate this text to Persian: {text}"
     data = {
@@ -205,14 +209,38 @@ def translate_text(text, target_lang="fa"):
         response = requests.post(HUGGINGFACE_API_URL, headers=headers, json=data, timeout=10)
         response.raise_for_status()
         result = response.json()
+        logger.info(f"DeepSeek response: {result}")
         if isinstance(result, list) and len(result) > 0:
             translated = result[0].get("generated_text", "")
-            # Remove the prompt part from the response
-            return translated.replace(prompt, "").strip()
-        return f"{text} - ترجمه نشد"
+            translated = translated.replace(prompt, "").strip()
+            if translated and translated != text:  # Check if translation is meaningful
+                return translated
+        logger.warning("DeepSeek translation failed or returned empty result")
     except Exception as e:
-        logger.warning(f"Error translating with DeepSeek: {str(e)}")
-        return f"{text} - ترجمه نشد"
+        logger.error(f"Error translating with DeepSeek: {str(e)}")
+    
+    # Fallback: Try LibreTranslate
+    try:
+        data = {
+            "q": text,
+            "source": "en",
+            "target": target_lang,
+            "format": "text"
+        }
+        response = requests.post(LIBRETRANSLATE_API_URL, json=data, timeout=10)
+        response.raise_for_status()
+        result = response.json()
+        logger.info(f"LibreTranslate response: {result}")
+        if "translatedText" in result:
+            translated = result["translatedText"].strip()
+            if translated:
+                return translated
+        logger.warning("LibreTranslate translation failed or returned empty result")
+    except Exception as e:
+        logger.error(f"Error translating with LibreTranslate: {str(e)}")
+    
+    # Final fallback: Return original text with a message
+    return f"{text} - ترجمه نشد"
 
 # Function to fetch stock price using yfinance
 def fetch_stock_price(company_name):
