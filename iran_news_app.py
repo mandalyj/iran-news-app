@@ -383,23 +383,38 @@ def main():
     if 'articles' not in st.session_state:
         st.session_state.articles = []
     
+    # Debug: Log the state to see if articles are being cleared
+    if not st.session_state.articles:
+        st.info("No articles in session state. Please search for news.")
+    else:
+        st.info(f"Found {len(st.session_state.articles)} articles in session state.")
+    
     # Sidebar for queries and filters
     with st.sidebar:
         st.header("Query Settings")
-        query = st.text_input("Search Query", value="Iran")
-        days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7)
-        max_articles = st.slider("Maximum number of articles", min_value=5, max_value=100, value=20)
+        query = st.text_input("Search Query", value="Iran", key="search_query")
+        days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7, key="days_back")
+        max_articles = st.slider("Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
         
         # Add search button
         search_button = st.button("Search for News")
         
+        # Add clear button to reset articles
+        clear_button = st.button("Clear Results")
+        
         # Telegram settings
         st.header("Telegram Settings")
-        telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607")
+        telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607", key="telegram_chat_id")
         
         # Download options
         st.header("Download Options")
-        download_format = st.selectbox("Download Format", ["CSV", "JSON"])
+        download_format = st.selectbox("Download Format", ["CSV", "JSON"], key="download_format")
+    
+    # Clear articles if clear button is pressed
+    if clear_button:
+        st.session_state.articles = []
+        st.session_state.selected_articles = []
+        st.experimental_rerun()  # Force a rerun to refresh the page
     
     # Execute search when button is clicked
     if search_button:
@@ -412,8 +427,6 @@ def main():
             
             # Store articles in session state
             st.session_state.articles = articles
-            
-            # Reset selected articles when new search is performed
             st.session_state.selected_articles = []
     
     # Always display articles if they exist in session state
