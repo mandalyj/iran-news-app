@@ -98,9 +98,69 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
     st.error(f"Failed to fetch Gnews after {retries} attempts")
     return []
 
-# Function to display news articles in a nice format
+# Function to translate text using LibreTranslate API
+def translate_text(text, target_lang="fa"):
+    """
+    Translate text to target language using LibreTranslate API
+    
+    Args:
+        text: Text to translate
+        target_lang: Target language code (default: 'fa' for Persian)
+        
+    Returns:
+        Translated text or fallback translation on failure
+    """
+    if not text or len(text.strip()) < 1:
+        return ""
+    
+    # Fallback translation in case LibreTranslate fails
+    prefixes = {
+        "us": "آمریکا",
+        "iran": "ایران",
+        "nuclear": "هسته‌ای",
+        "talks": "مذاکرات",
+        "news": "اخبار",
+        "israel": "اسرائیل",
+        "russia": "روسیه",
+        "china": "چین"
+    }
+    fallback_translated = text
+    for eng, fa in prefixes.items():
+        fallback_translated = fallback_translated.replace(eng.lower(), f"{eng}({fa})")
+    fallback_translated = f"{fallback_translated} - ترجمه به فارسی"
+
+    try:
+        payload = {
+            "q": text,
+            "source": "en",
+            "target": target_lang,
+            "format": "text"
+        }
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(LIBRETRANSLATE_URL, json=payload, timeout=10)
+                response.raise_for_status()
+                result = response.json()
+                if "translatedText" in result:
+                    return result["translatedText"]
+                else:
+                    logger.warning("Translation API returned unexpected response format")
+                    return fallback_translated
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                else:
+                    logger.warning(f"Translation failed after {max_retries} attempts: {str(e)}")
+                    return fallback_translated
+        return fallback_translated
+    except Exception as e:
+        logger.warning(f"Error translating text: {str(e)}")
+        return fallback_translated
+
+# Function to display news articles in a nice format with translations
 def display_news_articles(articles):
-    """Display news articles in a structured format"""
+    """Display news articles in a structured format with Persian translations"""
     if not articles:
         st.warning("No news articles to display")
         return
@@ -153,7 +213,14 @@ def display_news_articles(articles):
                     st.session_state.selected_articles = [a for a in st.session_state.selected_articles 
                                                          if a.get('url') != article['url']]
             
+            # Translate title and description
+            with st.spinner(f"Translating: {article['title'][:30]}..."):
+                translated_title = translate_text(article["title"])
+                translated_description = translate_text(article["description"])
+            
+            # Display article with translation
             st.markdown(f"### [{article['title']}]({article['url']})")
+            st.markdown(f"🇮🇷 **{translated_title}**")
             st.markdown(f"**Source:** {article['source']}")
             st.markdown(f"**Published:** {article['published_at']}")
             
@@ -164,6 +231,7 @@ def display_news_articles(articles):
                     st.info("Image could not be loaded")
             
             st.markdown(article["description"])
+            st.markdown(f"🇮🇷 {translated_description}")
             st.markdown("---")
         
         # Second article in the row (if available)
@@ -188,7 +256,14 @@ def display_news_articles(articles):
                         st.session_state.selected_articles = [a for a in st.session_state.selected_articles 
                                                              if a.get('url') != article['url']]
                 
+                # Translate title and description
+                with st.spinner(f"Translating: {article['title'][:30]}..."):
+                    translated_title = translate_text(article["title"])
+                    translated_description = translate_text(article["description"])
+                
+                # Display article with translation
                 st.markdown(f"### [{article['title']}]({article['url']})")
+                st.markdown(f"🇮🇷 **{translated_title}**")
                 st.markdown(f"**Source:** {article['source']}")
                 st.markdown(f"**Published:** {article['published_at']}")
                 
@@ -199,6 +274,7 @@ def display_news_articles(articles):
                         st.info("Image could not be loaded")
                 
                 st.markdown(article["description"])
+                st.markdown(f"🇮🇷 {translated_description}")
                 st.markdown("---")
 
 # Function to save articles to a file
@@ -217,78 +293,6 @@ def save_articles_to_file(articles, format="csv"):
         return json.dumps(articles, indent=2)
     else:
         return None
-
-# Function to translate text using LibreTranslate API
-def translate_text(text, target_lang="fa"):
-    """
-    Translate text to target language using LibreTranslate API
-    
-    Args:
-        text: Text to translate
-        target_lang: Target language code (default: 'fa' for Persian)
-        
-    Returns:
-        Translated text or original text on failure
-    """
-    if not text or len(text.strip()) < 1:
-        return ""
-    
-    try:
-        # Use LibreTranslate API for translation
-        payload = {
-            "q": text,
-            "source": "en",
-            "target": target_lang,
-            "format": "text"
-        }
-        
-        # Add retry logic for robustness
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(LIBRETRANSLATE_URL, json=payload, timeout=20)
-                response.raise_for_status()
-                result = response.json()
-                
-                if "translatedText" in result:
-                    return result["translatedText"]
-                else:
-                    st.warning(f"Translation API returned unexpected response format")
-                    break
-                    
-            except requests.exceptions.RequestException as e:
-                if attempt < max_retries - 1:
-                    # Exponential backoff: wait 2^attempt seconds
-                    time.sleep(2 ** attempt)
-                else:
-                    st.warning(f"Translation failed after {max_retries} attempts: {str(e)}")
-                    break
-                    
-        # Fallback to simple word-by-word translation if API fails
-        prefixes = {
-            "us": "آمریکا",
-            "iran": "ایران",
-            "nuclear": "هسته‌ای",
-            "talks": "مذاکرات",
-            "news": "اخبار",
-            "israel": "اسرائیل",
-            "russia": "روسیه",
-            "china": "چین"
-        }
-        
-        # Adding Persian characters to simulate translation
-        translated = text
-        for eng, fa in prefixes.items():
-            translated = translated.replace(eng.lower(), f"{eng}({fa})")
-        
-        # Add Persian notation
-        translated = f"{translated} - ترجمه به فارسی"
-        
-        return translated
-        
-    except Exception as e:
-        st.warning(f"Error translating text: {str(e)}")
-        return text  # Return original text on failure
 
 # Function to send a message to Telegram
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
@@ -356,7 +360,7 @@ def main():
             # Reset selected articles when new search is performed
             st.session_state.selected_articles = []
             
-            # Display the articles
+            # Display the articles with translations
             display_news_articles(articles)
     
     # Download section in the sidebar
@@ -381,29 +385,14 @@ def main():
             
             # Send selected news to Telegram
             if st.session_state.selected_articles:
-                # Option to include translation
-                include_translation = st.checkbox("Include Persian Translation", value=True)
-                
                 if st.button("Send Selected News to Telegram"):
-                    with st.spinner("Translating and sending to Telegram..."):
+                    with st.spinner("Sending to Telegram..."):
                         success_count = 0
                         fail_count = 0
                         
                         for article in st.session_state.selected_articles:
-                            # Format message for Telegram
-                            if include_translation:
-                                # Translate title and description
-                                with st.spinner(f"Translating: {article['title'][:30]}..."):
-                                    translated_title = translate_text(article['title'])
-                                    translated_description = translate_text(article['description'])
-                                    
-                                    # Format message with both languages
-                                    message = f"*{article['title']}*\n\n{article['description']}\n\n"
-                                    message += f"🇮🇷 *{translated_title}*\n\n{translated_description}\n\n"
-                                    message += f"[Read more]({article['url']})"
-                            else:
-                                # English only
-                                message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
+                            # Since translations are already shown, we just send the English version
+                            message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
                             
                             # Send to Telegram
                             success, result = send_telegram_message(telegram_chat_id, message, disable_web_page_preview=False)
