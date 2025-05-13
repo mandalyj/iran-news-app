@@ -28,22 +28,26 @@ st.set_page_config(
     layout="wide"
 )
 
-# Add custom CSS to adjust text alignment and font size
+# Add custom CSS to adjust text alignment, font, and size
 st.markdown(
     """
     <style>
     .persian-text {
         direction: rtl;
         text-align: right;
-        font-size: 18px !important; /* Increase font size for Persian */
+        font-family: "B Nazanin", "Arial Unicode MS", "Tahoma", sans-serif; /* B Nazanin as Persian font */
+        font-size: 18px !important; /* Persian font size */
     }
     .english-text {
         direction: ltr;
         text-align: left;
-        font-size: 16px !important; /* Keep English font size reasonable */
+        font-size: 14px !important; /* Reduced English font size by 2 units */
     }
     .article-section {
         margin-bottom: 20px;
+    }
+    .title-link {
+        font-size: 16px !important; /* Title font size */
     }
     </style>
     """,
@@ -237,8 +241,7 @@ def display_news_articles(articles):
             
             # Display article with translation
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-            st.markdown(f'### [{article["title"]}]({article["url"]})', unsafe_allow_html=True)
-            st.markdown('<div class="english-text">**Title (English):** ' + article["title"] + '</div>', unsafe_allow_html=True)
+            st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
             st.markdown(f'**Published:** {article["published_at"]}')
@@ -282,8 +285,7 @@ def display_news_articles(articles):
                 
                 # Display article with translation
                 st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-                st.markdown(f'### [{article["title"]}]({article["url"]})', unsafe_allow_html=True)
-                st.markdown('<div class="english-text">**Title (English):** ' + article["title"] + '</div>', unsafe_allow_html=True)
+                st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
                 st.markdown(f'**Published:** {article["published_at"]}')
@@ -430,7 +432,7 @@ def main():
                         if success_count > 0:
                             st.success(f"Successfully sent {success_count} article(s) to Telegram")
                         if fail_count > 0:
-                            st.warning(f"Failed to send {fail_count} article(s) to Telegram")
+                            st.warning(f"Failed to send {fail_count) article(s) to Telegram")
             else:
                 st.info("Select articles to send to Telegram")
 
