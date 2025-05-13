@@ -22,8 +22,9 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # MyMemory Translation API endpoint
 MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
 
-# Temporary file to store articles
+# Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
+CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
 
 # Initialize Streamlit page with custom CSS
 st.set_page_config(
@@ -77,6 +78,25 @@ def save_articles_to_file(articles):
             json.dump(articles, f)
     except Exception as e:
         logger.warning(f"Error saving articles to file: {str(e)}")
+
+# Load chat IDs from file
+def load_chat_ids():
+    try:
+        if os.path.exists(CHAT_IDS_FILE):
+            with open(CHAT_IDS_FILE, "r") as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        logger.warning(f"Error loading chat IDs from file: {str(e)}")
+        return {}
+
+# Save chat IDs to file
+def save_chat_ids(chat_ids):
+    try:
+        with open(CHAT_IDS_FILE, "w") as f:
+            json.dump(chat_ids, f)
+    except Exception as e:
+        logger.warning(f"Error saving chat IDs to file: {str(e)}")
 
 # Step 1: Fetch news from Gnews API
 def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
@@ -231,6 +251,53 @@ def fetch_stock_price(company_name):
         logger.warning(f"Error fetching stock price for {company_name}: {str(e)}")
         return None, str(e)
 
+# Function to get Chat ID from Telegram username
+def get_chat_id_from_username(username, chat_ids):
+    """
+    Get Chat ID from Telegram username using stored chat IDs or getUpdates
+    """
+    try:
+        if not username.startswith("@"):
+            return None, "Username must start with @ (e.g., @username)"
+        
+        # Remove the @ symbol
+        username = username[1:].lower()
+        
+        # Check if username is already in stored chat IDs
+        if username in chat_ids:
+            return chat_ids[username], None
+        
+        # Use getUpdates to check for recent chats
+        url = f"{TELEGRAM_API_URL}/getUpdates"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get("ok"):
+            return None, "Failed to fetch updates from Telegram"
+        
+        # Look for the username in recent updates
+        for update in data.get("result", []):
+            if "message" in update and "chat" in update["message"]:
+                chat = update["message"]["chat"]
+                if chat.get("username", "").lower() == username:
+                    chat_id = chat["id"]
+                    chat_ids[username] = chat_id
+                    save_chat_ids(chat_ids)
+                    return chat_id, None
+                # Check if it's a group with the username
+                if chat.get("type") == "group" or chat.get("type") == "supergroup":
+                    if chat.get("title", "").lower().find(username) != -1:
+                        chat_id = chat["id"]
+                        chat_ids[username] = chat_id
+                        save_chat_ids(chat_ids)
+                        return chat_id, None
+        
+        return None, f"Chat ID not found for username @{username}. Make sure the user/group has interacted with the bot."
+    except Exception as e:
+        logger.warning(f"Error fetching Chat ID for username {username}: {str(e)}")
+        return None, str(e)
+
 # Function to pre-translate articles and fetch stock prices
 def pre_process_articles(articles):
     """
@@ -347,6 +414,10 @@ def save_articles_to_file_for_download(articles, format="csv"):
 # Function to send a message to Telegram
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
+        # Ensure message length is within Telegram's limit (4096 characters)
+        if len(message) > 4096:
+            message = message[:4093] + "..."
+        
         url = f"{TELEGRAM_API_URL}/sendMessage"
         data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
         response = requests.post(url, data=data, timeout=10)
@@ -369,6 +440,8 @@ def main():
         st.session_state.selected_articles = []
     if 'articles' not in st.session_state:
         st.session_state.articles = load_articles_from_file()  # Load from file if exists
+    if 'chat_ids' not in st.session_state:
+        st.session_state.chat_ids = load_chat_ids()  # Load chat IDs from file
     
     # Debug: Log the state to see if articles are being cleared
     if not st.session_state.articles:
@@ -392,7 +465,17 @@ def main():
         # Telegram settings
         st.header("Telegram Settings")
         telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607", key="telegram_chat_id")
-        telegram_user_or_group_id = st.text_input("Send to User/Group Chat ID", value="", key="telegram_user_or_group_id", help="Enter the Chat ID of the user or group to send selected news to (leave blank to use default Chat ID)")
+        telegram_user_or_group_id = st.text_input("Send to User/Group", value="", key="telegram_user_or_group_id", help="Enter the @username or @groupname to send selected news to (leave blank to use default Chat ID)")
+        
+        # Add a link to start a chat with the bot
+        bot_username = "YourBotUsername"  # Replace with your bot's username, e.g., @YourBot
+        st.markdown(f"[Start a chat with the bot](https://t.me/{bot_username}) to allow sending messages.", unsafe_allow_html=True)
+        
+        # Display stored usernames
+        if st.session_state.chat_ids:
+            st.subheader("Known Users/Groups")
+            for username, chat_id in st.session_state.chat_ids.items():
+                st.write(f"@{username}: {chat_id}")
         
         # Download options
         st.header("Download Options")
@@ -448,11 +531,28 @@ def main():
                     with st.spinner("Sending to Telegram..."):
                         success_count = 0
                         fail_count = 0
+                        # Determine the target chat ID
                         target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
+                        
+                        # If the input starts with @, try to resolve username to Chat ID
+                        if target_chat_id.startswith("@"):
+                            chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
+                            if chat_id is not None:
+                                target_chat_id = chat_id
+                            else:
+                                st.error(f"Failed to resolve username: {error}")
+                                fail_count = len(st.session_state.selected_articles)  # Mark all as failed
+                                break
+                        
+                        # Debug: Show the target chat ID and message
+                        st.info(f"Sending to Chat ID: {target_chat_id}")
+                        
                         for article in st.session_state.selected_articles:
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
                             if article["stock_price"] is not None:
                                 message += f"\n\n**Latest Stock Price (USD):** {article['stock_price']}"
+                            # Debug: Show the message being sent
+                            st.info(f"Message: {message}")
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
                             if success:
                                 success_count += 1
