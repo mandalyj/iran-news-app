@@ -8,6 +8,7 @@ import base64
 from io import BytesIO
 import json
 import os
+import yfinance as yf  # Added for Yahoo Finance integration
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -126,7 +127,8 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
                     "description": a.get("description", "") or "No description available",
                     "image_url": a.get("image", ""),
                     "translated_title": "",  # Placeholder for translation
-                    "translated_description": ""  # Placeholder for translation
+                    "translated_description": "",  # Placeholder for translation
+                    "stock_price": None  # Placeholder for stock price
                 }
                 for a in articles
             ]
@@ -193,21 +195,65 @@ def translate_text(text, target_lang="fa"):
         logger.warning(f"Unexpected error translating text: {str(e)}")
         return fallback_translated
 
-# Function to pre-translate articles
-def pre_translate_articles(articles):
+# Function to fetch stock price using yfinance
+def fetch_stock_price(company_name):
     """
-    Pre-translate titles and descriptions for all articles
+    Fetch the latest stock price for a company using yfinance
+    """
+    try:
+        # Simple mapping of company names to ticker symbols (you can expand this)
+        ticker_map = {
+            "apple": "AAPL",
+            "microsoft": "MSFT",
+            "google": "GOOGL",
+            "amazon": "AMZN",
+            "tesla": "TSLA"
+        }
+        
+        # Try to find a matching ticker
+        ticker_symbol = None
+        company_name_lower = company_name.lower()
+        for key, value in ticker_map.items():
+            if key in company_name_lower:
+                ticker_symbol = value
+                break
+        
+        if not ticker_symbol:
+            return None, "Ticker not found for this company"
+        
+        ticker = yf.Ticker(ticker_symbol)
+        stock_data = ticker.history(period="1d")
+        if not stock_data.empty:
+            latest_price = stock_data["Close"].iloc[-1]
+            return round(latest_price, 2), None
+        return None, "No stock data available"
+    except Exception as e:
+        logger.warning(f"Error fetching stock price for {company_name}: {str(e)}")
+        return None, str(e)
+
+# Function to pre-translate articles and fetch stock prices
+def pre_process_articles(articles):
+    """
+    Pre-translate titles and descriptions, and fetch stock prices for all articles
     """
     for article in articles:
         if not article.get("translated_title"):
             article["translated_title"] = translate_text(article["title"])
         if not article.get("translated_description"):
             article["translated_description"] = translate_text(article["description"])
+        # Try to fetch stock price based on article title
+        stock_price, error = fetch_stock_price(article["title"])
+        if stock_price is not None:
+            article["stock_price"] = stock_price
+        else:
+            article["stock_price"] = None
+            if error:
+                logger.warning(f"Stock price fetch error for {article['title']}: {error}")
     return articles
 
-# Function to display news articles in a nice format with translations
+# Function to display news articles in a nice format with translations and stock prices
 def display_news_articles(articles):
-    """Display news articles in a structured format with Persian translations"""
+    """Display news articles in a structured format with Persian translations and stock prices"""
     if not articles:
         st.warning("No news articles to display")
         return
@@ -247,6 +293,8 @@ def display_news_articles(articles):
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
             st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
+            if article["stock_price"] is not None:
+                st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
             if article["image_url"]:
                 try:
                     st.image(article["image_url"], use_column_width=True)
@@ -272,6 +320,8 @@ def display_news_articles(articles):
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
                 st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
+                if article["stock_price"] is not None:
+                    st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
                 if article["image_url"]:
                     try:
                         st.image(article["image_url"], use_column_width=True)
@@ -360,7 +410,7 @@ def main():
         with st.spinner(f"Searching for news about {query}..."):
             articles = fetch_gnews(query=query, max_records=max_articles, days_back=days_back)
             if articles:
-                articles = pre_translate_articles(articles)  # Pre-translate all articles
+                articles = pre_process_articles(articles)  # Pre-translate and fetch stock prices
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
@@ -399,6 +449,8 @@ def main():
                         fail_count = 0
                         for article in st.session_state.selected_articles:
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
+                            if article["stock_price"] is not None:
+                                message += f"\n\n**Latest Stock Price (USD):** {article['stock_price']}"
                             success, result = send_telegram_message(telegram_chat_id, message, disable_web_page_preview=False)
                             if success:
                                 success_count += 1
