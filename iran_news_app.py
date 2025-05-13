@@ -41,13 +41,14 @@ st.markdown(
     .english-text {
         direction: ltr;
         text-align: left;
-        font-size: 14px !important; /* Reduced English font size by 2 units */
+        font-size: 14px !important; /* English font size */
     }
     .article-section {
         margin-bottom: 20px;
     }
     .title-link {
-        font-size: 16px !important; /* Title font size */
+        font-size: 17px !important; /* Increased by 1 unit */
+        font-weight: bold !important; /* Make the title bold */
     }
     </style>
     """,
@@ -123,6 +124,30 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
             
     st.error(f"Failed to fetch Gnews after {retries} attempts")
     return []
+
+# Function to convert UTC time to Tehran time
+def convert_to_tehran_time(utc_time_str):
+    """
+    Convert UTC time string to Tehran time (UTC+3:30)
+    
+    Args:
+        utc_time_str: UTC time string in format 'YYYY-MM-DDThh:mm:ssZ'
+        
+    Returns:
+        Formatted Tehran time string
+    """
+    try:
+        # Parse the UTC time string
+        utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
+        
+        # Add 3 hours and 30 minutes for Tehran time (UTC+3:30)
+        tehran_time = utc_time + timedelta(hours=3, minutes=30)
+        
+        # Format the time as a readable string in Persian
+        return tehran_time.strftime("%Y/%m/%d - %H:%M")
+    except Exception as e:
+        logger.warning(f"Error converting time: {str(e)}")
+        return utc_time_str  # Return original time if conversion fails
 
 # Function to translate text using MyMemory Translation API
 def translate_text(text, target_lang="fa"):
@@ -239,12 +264,15 @@ def display_news_articles(articles):
                 translated_title = translate_text(article["title"])
                 translated_description = translate_text(article["description"])
             
+            # Convert published time to Tehran time
+            tehran_time = convert_to_tehran_time(article["published_at"])
+            
             # Display article with translation
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
-            st.markdown(f'**Published:** {article["published_at"]}')
+            st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
             
             if article["image_url"]:
                 try:
@@ -283,12 +311,15 @@ def display_news_articles(articles):
                     translated_title = translate_text(article["title"])
                     translated_description = translate_text(article["description"])
                 
+                # Convert published time to Tehran time
+                tehran_time = convert_to_tehran_time(article["published_at"])
+                
                 # Display article with translation
                 st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                 st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
-                st.markdown(f'**Published:** {article["published_at"]}')
+                st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
                 
                 if article["image_url"]:
                     try:
