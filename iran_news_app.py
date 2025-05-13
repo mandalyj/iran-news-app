@@ -432,7 +432,7 @@ def main():
                         if success_count > 0:
                             st.success(f"Successfully sent {success_count} article(s) to Telegram")
                         if fail_count > 0:
-                            st.warning(f"Failed to send {fail_count) article(s) to Telegram")
+                            st.warning(f"Failed to send {fail_count} article(s) to Telegram")
             else:
                 st.info("Select articles to send to Telegram")
 
