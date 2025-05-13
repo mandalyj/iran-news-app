@@ -21,11 +21,33 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # MyMemory Translation API endpoint
 MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
 
-# Initialize Streamlit page
+# Initialize Streamlit page with custom CSS
 st.set_page_config(
     page_title="Iran News Aggregator",
     page_icon="📰",
     layout="wide"
+)
+
+# Add custom CSS to adjust text alignment and font size
+st.markdown(
+    """
+    <style>
+    .persian-text {
+        direction: rtl;
+        text-align: right;
+        font-size: 18px !important; /* Increase font size for Persian */
+    }
+    .english-text {
+        direction: ltr;
+        text-align: left;
+        font-size: 16px !important; /* Keep English font size reasonable */
+    }
+    .article-section {
+        margin-bottom: 20px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 # Step 1: Fetch news from Gnews API
@@ -139,7 +161,10 @@ def translate_text(text, target_lang="fa"):
         data = response.json()
         
         if data.get("responseStatus") == 200 and data.get("responseData", {}).get("translatedText"):
-            return data["responseData"]["translatedText"]
+            translated = data["responseData"]["translatedText"]
+            # Remove "IR" if it appears at the start
+            translated = translated.replace("IR ", "").strip()
+            return translated
         else:
             logger.warning("Translation API returned unexpected response")
             return fallback_translated
@@ -211,10 +236,12 @@ def display_news_articles(articles):
                 translated_description = translate_text(article["description"])
             
             # Display article with translation
-            st.markdown(f"### [{article['title']}]({article['url']})")
-            st.markdown(f"🇮🇷 **{translated_title}**")
-            st.markdown(f"**Source:** {article['source']}")
-            st.markdown(f"**Published:** {article['published_at']}")
+            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
+            st.markdown(f'### [{article["title"]}]({article["url"]})', unsafe_allow_html=True)
+            st.markdown('<div class="english-text">**Title (English):** ' + article["title"] + '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
+            st.markdown(f'**Source:** {article["source"]}')
+            st.markdown(f'**Published:** {article["published_at"]}')
             
             if article["image_url"]:
                 try:
@@ -222,9 +249,9 @@ def display_news_articles(articles):
                 except:
                     st.info("Image could not be loaded")
             
-            st.markdown(article["description"])
-            st.markdown(f"🇮🇷 {translated_description}")
-            st.markdown("---")
+            st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
         
         # Second article in the row (if available)
         if i + 1 < len(articles):
@@ -254,10 +281,12 @@ def display_news_articles(articles):
                     translated_description = translate_text(article["description"])
                 
                 # Display article with translation
-                st.markdown(f"### [{article['title']}]({article['url']})")
-                st.markdown(f"🇮🇷 **{translated_title}**")
-                st.markdown(f"**Source:** {article['source']}")
-                st.markdown(f"**Published:** {article['published_at']}")
+                st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
+                st.markdown(f'### [{article["title"]}]({article["url"]})', unsafe_allow_html=True)
+                st.markdown('<div class="english-text">**Title (English):** ' + article["title"] + '</div>', unsafe_allow_html=True)
+                st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
+                st.markdown(f'**Source:** {article["source"]}')
+                st.markdown(f'**Published:** {article["published_at"]}')
                 
                 if article["image_url"]:
                     try:
@@ -265,9 +294,9 @@ def display_news_articles(articles):
                     except:
                         st.info("Image could not be loaded")
                 
-                st.markdown(article["description"])
-                st.markdown(f"🇮🇷 {translated_description}")
-                st.markdown("---")
+                st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
+                st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file
 def save_articles_to_file(articles, format="csv"):
