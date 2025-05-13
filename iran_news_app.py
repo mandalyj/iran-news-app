@@ -7,6 +7,7 @@ import streamlit as st
 import base64
 from io import BytesIO
 import json
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -14,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
-NEWSAPI_KEY = "bd2ba3433daf4ad7a75821451ea49455"  # NewsAPI key provided
-TELEGRAM_BOT_TOKEN = "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ"  # Telegram Bot Token from your code
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "bd2ba3433daf4ad7a75821451ea49455")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # Translation API URL - using Google Translate free endpoint
 TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
