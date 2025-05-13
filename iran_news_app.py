@@ -18,8 +18,8 @@ GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Using your provided Gnews API Key
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-# LibreTranslate API endpoint (public instance)
-LIBRETRANSLATE_URL = "https://translate.argosopentech.com/translate"
+# MyMemory Translation API endpoint
+MYMEMORY_API_URL = "https://api.mymemory.translated.net/get"
 
 # Initialize Streamlit page
 st.set_page_config(
@@ -98,10 +98,10 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
     st.error(f"Failed to fetch Gnews after {retries} attempts")
     return []
 
-# Function to translate text using LibreTranslate API
+# Function to translate text using MyMemory Translation API
 def translate_text(text, target_lang="fa"):
     """
-    Translate text to target language using LibreTranslate API
+    Translate text to target language using MyMemory Translation API
     
     Args:
         text: Text to translate
@@ -113,7 +113,7 @@ def translate_text(text, target_lang="fa"):
     if not text or len(text.strip()) < 1:
         return ""
     
-    # Fallback translation in case LibreTranslate fails
+    # Fallback translation in case API fails
     prefixes = {
         "us": "آمریکا",
         "iran": "ایران",
@@ -130,32 +130,24 @@ def translate_text(text, target_lang="fa"):
     fallback_translated = f"{fallback_translated} - ترجمه به فارسی"
 
     try:
-        payload = {
+        params = {
             "q": text,
-            "source": "en",
-            "target": target_lang,
-            "format": "text"
+            "langpair": f"en|{target_lang}"
         }
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(LIBRETRANSLATE_URL, json=payload, timeout=10)
-                response.raise_for_status()
-                result = response.json()
-                if "translatedText" in result:
-                    return result["translatedText"]
-                else:
-                    logger.warning("Translation API returned unexpected response format")
-                    return fallback_translated
-            except requests.exceptions.RequestException as e:
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
-                else:
-                    logger.warning(f"Translation failed after {max_retries} attempts: {str(e)}")
-                    return fallback_translated
+        response = requests.get(MYMEMORY_API_URL, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if data.get("responseStatus") == 200 and data.get("responseData", {}).get("translatedText"):
+            return data["responseData"]["translatedText"]
+        else:
+            logger.warning("Translation API returned unexpected response")
+            return fallback_translated
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Error translating text with MyMemory: {str(e)}")
         return fallback_translated
     except Exception as e:
-        logger.warning(f"Error translating text: {str(e)}")
+        logger.warning(f"Unexpected error translating text: {str(e)}")
         return fallback_translated
 
 # Function to display news articles in a nice format with translations
