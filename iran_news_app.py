@@ -124,7 +124,9 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
                     "source": a.get("source", {}).get("name", "Unknown Source"),
                     "published_at": a.get("publishedAt", ""),
                     "description": a.get("description", "") or "No description available",
-                    "image_url": a.get("image", "")
+                    "image_url": a.get("image", ""),
+                    "translated_title": "",  # Placeholder for translation
+                    "translated_description": ""  # Placeholder for translation
                 }
                 for a in articles
             ]
@@ -191,6 +193,18 @@ def translate_text(text, target_lang="fa"):
         logger.warning(f"Unexpected error translating text: {str(e)}")
         return fallback_translated
 
+# Function to pre-translate articles
+def pre_translate_articles(articles):
+    """
+    Pre-translate titles and descriptions for all articles
+    """
+    for article in articles:
+        if not article.get("translated_title"):
+            article["translated_title"] = translate_text(article["title"])
+        if not article.get("translated_description"):
+            article["translated_description"] = translate_text(article["description"])
+    return articles
+
 # Function to display news articles in a nice format with translations
 def display_news_articles(articles):
     """Display news articles in a structured format with Persian translations"""
@@ -227,13 +241,10 @@ def display_news_articles(articles):
             else:
                 if is_selected:
                     st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-            with st.spinner(f"Translating: {article['title'][:30]}..."):
-                translated_title = translate_text(article["title"])
-                translated_description = translate_text(article["description"])
             tehran_time = convert_to_tehran_time(article["published_at"])
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
-            st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
             st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
             if article["image_url"]:
@@ -242,7 +253,7 @@ def display_news_articles(articles):
                 except:
                     st.info("Image could not be loaded")
             st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
-            st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
+            st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + article["translated_description"] + '</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
         if i + 1 < len(articles):
             with cols[1]:
@@ -255,13 +266,10 @@ def display_news_articles(articles):
                 else:
                     if is_selected:
                         st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-                with st.spinner(f"Translating: {article['title'][:30]}..."):
-                    translated_title = translate_text(article["title"])
-                    translated_description = translate_text(article["description"])
                 tehran_time = convert_to_tehran_time(article["published_at"])
                 st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                 st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
-                st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + translated_title + '</div>', unsafe_allow_html=True)
+                st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
                 st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
                 if article["image_url"]:
@@ -270,7 +278,7 @@ def display_news_articles(articles):
                     except:
                         st.info("Image could not be loaded")
                 st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
-                st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + translated_description + '</div>', unsafe_allow_html=True)
+                st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + article["translated_description"] + '</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file for download
@@ -321,7 +329,7 @@ def main():
     # Sidebar for queries and filters
     with st.sidebar:
         st.header("Query Settings")
-        query = st.text_input("Search Query", value="Iran", key="search_query")
+        query = st.text_input("Search Query", value="Iran", key="search_query").strip()
         days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7, key="days_back")
         max_articles = st.slider("Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
         
@@ -351,9 +359,13 @@ def main():
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
             articles = fetch_gnews(query=query, max_records=max_articles, days_back=days_back)
-            st.session_state.articles = articles
-            save_articles_to_file(articles)  # Save to temp file
-            st.session_state.selected_articles = []
+            if articles:
+                articles = pre_translate_articles(articles)  # Pre-translate all articles
+                st.session_state.articles = articles
+                save_articles_to_file(articles)  # Save to temp file
+                st.session_state.selected_articles = []
+            else:
+                st.warning("No articles fetched. Please try a different query.")
     
     # Always display articles if they exist in session state
     if st.session_state.articles:
