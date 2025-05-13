@@ -392,6 +392,7 @@ def main():
         # Telegram settings
         st.header("Telegram Settings")
         telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607", key="telegram_chat_id")
+        telegram_user_or_group_id = st.text_input("Send to User/Group Chat ID", value="", key="telegram_user_or_group_id", help="Enter the Chat ID of the user or group to send selected news to (leave blank to use default Chat ID)")
         
         # Download options
         st.header("Download Options")
@@ -447,16 +448,17 @@ def main():
                     with st.spinner("Sending to Telegram..."):
                         success_count = 0
                         fail_count = 0
+                        target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
                         for article in st.session_state.selected_articles:
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
                             if article["stock_price"] is not None:
                                 message += f"\n\n**Latest Stock Price (USD):** {article['stock_price']}"
-                            success, result = send_telegram_message(telegram_chat_id, message, disable_web_page_preview=False)
+                            success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
                             if success:
                                 success_count += 1
                             else:
                                 fail_count += 1
-                                st.error(f"Failed to send: {article['title']} - {result}")
+                                st.error(f"Failed to send to {target_chat_id}: {article['title']} - {result}")
                             time.sleep(1)
                         if success_count > 0:
                             st.success(f"Successfully sent {success_count} article(s) to Telegram")
