@@ -18,8 +18,8 @@ GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Using your provided Gnews API Key
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-# Translation API URL - using Google Translate free endpoint
-TRANSLATE_URL = "https://translate.googleapis.com/translate_a/single"
+# LibreTranslate API endpoint (public instance)
+LIBRETRANSLATE_URL = "https://translate.argosopentech.com/translate"
 
 # Initialize Streamlit page
 st.set_page_config(
@@ -218,10 +218,10 @@ def save_articles_to_file(articles, format="csv"):
     else:
         return None
 
-# Function to translate text using Google Translate API
+# Function to translate text using LibreTranslate API
 def translate_text(text, target_lang="fa"):
     """
-    Translate text to target language using Google Translate API
+    Translate text to target language using LibreTranslate API
     
     Args:
         text: Text to translate
@@ -234,11 +234,37 @@ def translate_text(text, target_lang="fa"):
         return ""
     
     try:
-        # Use a simpler alternative for translation
-        # This is a sample translation for demo purposes
-        # In real application, we would use proper translation API
+        # Use LibreTranslate API for translation
+        payload = {
+            "q": text,
+            "source": "en",
+            "target": target_lang,
+            "format": "text"
+        }
         
-        # Simulate translation for now with some Persian phrases
+        # Add retry logic for robustness
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(LIBRETRANSLATE_URL, json=payload, timeout=20)
+                response.raise_for_status()
+                result = response.json()
+                
+                if "translatedText" in result:
+                    return result["translatedText"]
+                else:
+                    st.warning(f"Translation API returned unexpected response format")
+                    break
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    # Exponential backoff: wait 2^attempt seconds
+                    time.sleep(2 ** attempt)
+                else:
+                    st.warning(f"Translation failed after {max_retries} attempts: {str(e)}")
+                    break
+                    
+        # Fallback to simple word-by-word translation if API fails
         prefixes = {
             "us": "آمریکا",
             "iran": "ایران",
