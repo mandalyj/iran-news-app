@@ -13,9 +13,9 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration
-NEWSAPI_URL = "https://newsapi.org/v2/everything"
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "bd2ba3433daf4ad7a75821451ea49455")
+# Configuration - Gnews API instead of NewsAPI
+GNEWS_API_URL = "https://gnews.io/api/v4/search"
+GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Using your provided Gnews API Key
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # Translation API URL - using Google Translate free endpoint
@@ -28,51 +28,54 @@ st.set_page_config(
     layout="wide"
 )
 
-# Step 1: Fetch news from NewsAPI
-def fetch_newsapi_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+# Step 1: Fetch news from Gnews API
+def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
     """
-    Fetch news articles from NewsAPI related to the given query
+    Fetch news articles from Gnews API related to the given query
     """
-    if not NEWSAPI_KEY or "YOUR_NEWSAPI_KEY" in NEWSAPI_KEY:
-        st.error("Invalid NewsAPI key. Please set a valid API key.")
+    if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
+        st.error("Invalid Gnews API key. Please set a valid API key.")
         return []
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-    week_ago = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%d")
-    st.info(f"Fetching news for query '{query}' from {week_ago} to {today}")
+    
+    today = datetime.utcnow()
+    week_ago = today - timedelta(days=days_back)
+    from_date = week_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
+    
+    st.info(f"Fetching news for query '{query}' from the past {days_back} days")
     
     for attempt in range(retries):
         try:
             params = {
                 "q": query,  # Search query
-                "apiKey": NEWSAPI_KEY,
-                "language": "en",
-                "sortBy": "relevancy",  # Sort by relevance
-                "pageSize": max_records,
-                "from": week_ago,
-                "to": today,
+                "apikey": GNEWS_API_KEY,
+                "lang": "en",
+                "country": "us",  # Can be changed to get news from different countries
+                "max": min(max_records, 100),  # Gnews free plan limits to 100 articles
+                "from": from_date
             }
-            response = requests.get(NEWSAPI_URL, params=params, timeout=15)
+            response = requests.get(GNEWS_API_URL, params=params, timeout=15)
             response.raise_for_status()
             data = response.json()
             
-            if data.get("status") != "ok":
-                st.error(f"NewsAPI error: {data.get('message', 'Unknown error')}")
+            # Check for error responses
+            if "errors" in data:
+                st.error(f"Gnews API error: {data['errors']}")
                 return []
                 
             articles = data.get("articles", [])
             if not articles:
-                st.warning(f"No articles found for query '{query}' between {week_ago} and {today}. Try broadening the query or checking the API key.")
+                st.warning(f"No articles found for query '{query}'. Try broadening the query.")
                 return []
                 
-            # Process articles into a usable format
+            # Process articles into the same format as before
             return [
                 {
-                    "title": a["title"],
-                    "url": a["url"],
+                    "title": a.get("title", "No title"),
+                    "url": a.get("url", ""),
                     "source": a.get("source", {}).get("name", "Unknown Source"),
                     "published_at": a.get("publishedAt", ""),
-                    "description": a.get("description", "") or a.get("content", "")[:200] or "No description available",
-                    "image_url": a.get("urlToImage", "")
+                    "description": a.get("description", "") or "No description available",
+                    "image_url": a.get("image", "")
                 }
                 for a in articles
             ]
@@ -83,16 +86,16 @@ def fetch_newsapi_news(query="Iran", max_records=20, days_back=7, retries=3, bac
                 st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
                 time.sleep(sleep_time)
             elif e.response.status_code == 401:
-                st.error("Unauthorized: Invalid NewsAPI key. Please check or replace the key.")
+                st.error("Unauthorized: Invalid Gnews API key. Please check or replace the key.")
                 return []
             else:
-                st.error(f"Failed to fetch NewsAPI news: {e}")
+                st.error(f"Failed to fetch Gnews: {e}")
                 return []
         except Exception as e:
-            st.error(f"Failed to fetch NewsAPI news: {e}")
+            st.error(f"Failed to fetch Gnews: {e}")
             return []
             
-    st.error(f"Failed to fetch NewsAPI news after {retries} attempts")
+    st.error(f"Failed to fetch Gnews after {retries} attempts")
     return []
 
 # Function to display news articles in a nice format
@@ -315,7 +318,7 @@ def main():
     # Execute search when button is clicked
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
-            articles = fetch_newsapi_news(
+            articles = fetch_gnews(
                 query=query,
                 max_records=max_articles,
                 days_back=days_back
