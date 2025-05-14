@@ -287,25 +287,37 @@ def format_tehran_time(tehran_time):
     return tehran_time.strftime("%Y/%m/%d - %H:%M")
 
 # Function to filter articles by time range
-def filter_articles_by_time(articles, time_range_hours):
+def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None):
     """
-    Filter articles based on the selected time range (in hours)
+    Filter articles based on the selected time range or date range
+    - If time_range_hours is infinite (All articles), filter by start_date and end_date
+    - Otherwise, filter by time_range_hours relative to current time
     """
     if not articles:
         return []
+    
+    filtered_articles = []
     
     # Current time in Tehran (UTC+3:30)
     current_utc_time = datetime.utcnow()
     current_tehran_time = current_utc_time + timedelta(hours=3, minutes=30)
     
-    # Calculate the cutoff time
-    cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
-    
-    filtered_articles = []
-    for article in articles:
-        published_time = parse_to_tehran_time(article["published_at"])
-        if published_time and published_time >= cutoff_time:
-            filtered_articles.append(article)
+    # If "All articles" is selected, filter by start_date and end_date
+    if time_range_hours == float("inf"):
+        start_datetime = datetime.combine(start_date, datetime.min.time()) + timedelta(hours=3, minutes=30)
+        end_datetime = datetime.combine(end_date, datetime.max.time()) + timedelta(hours=3, minutes=30)
+        
+        for article in articles:
+            published_time = parse_to_tehran_time(article["published_at"])
+            if published_time and start_datetime <= published_time <= end_datetime:
+                filtered_articles.append(article)
+    else:
+        # Filter by time range relative to current time
+        cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
+        for article in articles:
+            published_time = parse_to_tehran_time(article["published_at"])
+            if published_time and published_time >= cutoff_time:
+                filtered_articles.append(article)
     
     return filtered_articles
 
@@ -568,7 +580,7 @@ def main():
             "Last 4 hours": 4,       # 4 hours
             "Last 12 hours": 12,     # 12 hours
             "Last 24 hours": 24,     # 24 hours
-            "All articles": float("inf")  # No time filter
+            "All articles": float("inf")  # Use start_date and end_date
         }
         selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
         time_range_hours = time_range_options[selected_time_range]
@@ -614,10 +626,10 @@ def main():
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
-                # Filter articles by time range
-                filtered_articles = filter_articles_by_time(articles, time_range_hours)
+                # Filter articles by time range or date range
+                filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date)
                 if not filtered_articles:
-                    st.warning(f"No articles found within the selected time range ({selected_time_range}). Try a larger time range or adjust the date.")
+                    st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range or adjust the date.")
                 else:
                     articles = filtered_articles
                 articles = pre_process_articles(articles)  # Pre-process (stock prices only)
