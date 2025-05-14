@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import logging
-import streamlit as st  # مطمئن می‌شیم این import هست
+import streamlit as st
 import base64
 from io import BytesIO
 import json
@@ -15,11 +15,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - Gnews API, NewsData.io, and NewsAPI
+# Configuration - GNews API and NewsAPI
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
-GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your Gnews API Key
-NEWSDATA_API_URL = "https://newsdata.io/api/1/news"
-NEWSDATA_API_KEY = os.environ.get("NEWSDATA_API_KEY", "pub_8684512de957559ac735ec05209d0f3c52303")  # Your NewsData.io API Key
+GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your GNews API Key
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Replace with your NewsAPI Key
 
@@ -102,13 +100,13 @@ def save_chat_ids(chat_ids):
     except Exception as e:
         logger.warning(f"Error saving chat IDs to file: {str(e)}")
 
-# Fetch news from Gnews API
+# Fetch news from GNews API
 def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     """
-    Fetch news articles from Gnews API
+    Fetch news articles from GNews API
     """
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
-        error_msg = "Invalid Gnews API key. Please set a valid API key."
+        error_msg = "Invalid GNews API key. Please set a valid API key."
         logger.error(error_msg)
         return [], error_msg
     
@@ -130,7 +128,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         logger.info(f"GNews response: {data}")
         
         if "errors" in data:
-            error_msg = f"Gnews API error: {data['errors']}"
+            error_msg = f"GNews API error: {data['errors']}"
             logger.error(error_msg)
             return [], error_msg
             
@@ -156,61 +154,6 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         ], None
     except Exception as e:
         error_msg = f"Error fetching GNews: {str(e)}"
-        logger.error(error_msg)
-        return [], error_msg
-
-# Fetch news from NewsData.io
-def fetch_newsdata(query="Iran", max_records=20, from_date=None, to_date=None):
-    """
-    Fetch news articles from NewsData.io API
-    """
-    if not NEWSDATA_API_KEY or NEWSDATA_API_KEY == "pub_8684512de957559ac735ec05209d0f3c52303":
-        error_msg = "Invalid NewsData.io API key. Please set a valid API key."
-        logger.error(error_msg)
-        return [], error_msg
-    
-    params = {
-        "q": query,
-        "apikey": NEWSDATA_API_KEY,
-        "language": "en",
-        "country": "us",
-        "page_size": min(max_records, 50)
-    }
-    logger.info(f"Sending NewsData.io request with params: {params}")
-    
-    try:
-        response = requests.get(NEWSDATA_API_URL, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"NewsData.io response: {data}")
-        
-        if data.get("status") != "success":
-            error_msg = f"NewsData.io API error: {data.get('message', 'Unknown error')}"
-            logger.error(error_msg)
-            return [], error_msg
-            
-        articles = data.get("results", [])
-        if not articles:
-            error_msg = f"No articles found for query '{query}' in NewsData.io."
-            logger.warning(error_msg)
-            return [], error_msg
-            
-        return [
-            {
-                "title": a.get("title", "No title"),
-                "url": a.get("link", ""),
-                "source": a.get("source_id", "Unknown Source"),
-                "published_at": a.get("pubDate", ""),
-                "description": a.get("description", "") or "No description available",
-                "image_url": a.get("image_url", ""),
-                "translated_title": "",
-                "translated_description": "",
-                "stock_price": None
-            }
-            for a in articles
-        ], None
-    except Exception as e:
-        error_msg = f"Error fetching NewsData.io: {str(e)}"
         logger.error(error_msg)
         return [], error_msg
 
@@ -279,14 +222,13 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     st.write("Starting news fetch process (parallel)...")
     fetch_functions = [
         (fetch_gnews, "GNews"),
-        (fetch_newsdata, "NewsData.io"),
         (fetch_newsapi, "NewsAPI")
     ]
     
     all_articles = []
     errors = []
     
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         future_to_api = {
             executor.submit(func, query, max_records, from_date, to_date): name
             for func, name in fetch_functions
@@ -378,9 +320,7 @@ def pre_process_articles(articles):
     """
     Pre-process articles by fetching stock prices
     """
-    st.write("Starting pre-processing of articles (stock prices only)...")
     for i, article in enumerate(articles):
-        st.write(f"Processing article {i+1}/{len(articles)}: {article['title']}")
         try:
             # Fetch stock price based on article title
             stock_price, error = fetch_stock_price(article["title"])
@@ -396,7 +336,6 @@ def pre_process_articles(articles):
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
-    st.write("Pre-processing completed.")
     return articles
 
 # Function to display news articles in a nice format
@@ -564,7 +503,7 @@ def get_chat_id_from_username(username, chat_ids):
 
 # Main Streamlit app
 def main():
-    st.title("Iran News Aggregator")  # مطمئن می‌شیم st اینجا کار می‌کنه
+    st.title("Iran News Aggregator")
     
     # Initialize session state for selected articles and articles
     if 'selected_articles' not in st.session_state:
@@ -625,17 +564,12 @@ def main():
     # Execute search when button is clicked
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
-            st.write("Fetching news started...")
             # Convert dates to string format for APIs
             from_date = start_date.strftime("%Y-%m-%d")
             to_date = end_date.strftime("%Y-%m-%d")
-            st.write(f"Fetching news from {from_date} to {to_date}")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
-            st.write("Fetch process completed.")
             if articles:
-                st.write(f"Fetched {len(articles)} articles. Starting pre-processing...")
                 articles = pre_process_articles(articles)  # Pre-process (stock prices only)
-                st.write(f"Pre-processing done. Saving {len(articles)} articles to session state...")
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
