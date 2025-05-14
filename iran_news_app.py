@@ -266,18 +266,48 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     
     return unique_articles
 
-# Function to convert UTC time to Tehran time
-def convert_to_tehran_time(utc_time_str):
+# Function to convert UTC time to Tehran time and return as datetime object
+def parse_to_tehran_time(utc_time_str):
     """
-    Convert UTC time string to Tehran time (UTC+3:30)
+    Convert UTC time string to Tehran time (UTC+3:30) and return as datetime object
     """
     try:
         utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
         tehran_time = utc_time + timedelta(hours=3, minutes=30)
-        return tehran_time.strftime("%Y/%m/%d - %H:%M")
+        return tehran_time
     except Exception as e:
         logger.warning(f"Error converting time: {str(e)}")
-        return utc_time_str
+        return None
+
+# Function to format Tehran time for display
+def format_tehran_time(tehran_time):
+    """
+    Format Tehran time for display
+    """
+    return tehran_time.strftime("%Y/%m/%d - %H:%M")
+
+# Function to filter articles by time range
+def filter_articles_by_time(articles, time_range_hours):
+    """
+    Filter articles based on the selected time range (in hours)
+    """
+    if not articles:
+        return []
+    
+    # Current time in Tehran (UTC+3:30)
+    current_utc_time = datetime.utcnow()
+    current_tehran_time = current_utc_time + timedelta(hours=3, minutes=30)
+    
+    # Calculate the cutoff time
+    cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
+    
+    filtered_articles = []
+    for article in articles:
+        published_time = parse_to_tehran_time(article["published_at"])
+        if published_time and published_time >= cutoff_time:
+            filtered_articles.append(article)
+    
+    return filtered_articles
 
 # Function to fetch stock price using yfinance
 def fetch_stock_price(company_name):
@@ -376,12 +406,13 @@ def display_news_articles(articles):
             else:
                 if is_selected:
                     st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-            tehran_time = convert_to_tehran_time(article["published_at"])
+            tehran_time = parse_to_tehran_time(article["published_at"])
+            tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
-            st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
             if article["stock_price"] is not None:
                 st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
             if article["image_url"]:
@@ -404,12 +435,13 @@ def display_news_articles(articles):
                 else:
                     if is_selected:
                         st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-                tehran_time = convert_to_tehran_time(article["published_at"])
+                tehran_time = parse_to_tehran_time(article["published_at"])
+                tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
                 st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                 st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
-                st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
                 if article["stock_price"] is not None:
                     st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
                 if article["image_url"]:
@@ -529,6 +561,18 @@ def main():
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=today, key="end_date")
         max_articles = st.slider(label="Maximum number of articles per API", min_value=5, max_value=100, value=20, key="max_articles")
         
+        # Add time range filter
+        time_range_options = {
+            "Last 30 minutes": 0.5,  # 30 minutes
+            "Last 1 hour": 1,        # 1 hour
+            "Last 4 hours": 4,       # 4 hours
+            "Last 12 hours": 12,     # 12 hours
+            "Last 24 hours": 24,     # 24 hours
+            "All articles": float("inf")  # No time filter
+        }
+        selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
+        time_range_hours = time_range_options[selected_time_range]
+        
         # Add search button
         search_button = st.button("Search for News")
         
@@ -570,6 +614,12 @@ def main():
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
+                # Filter articles by time range
+                filtered_articles = filter_articles_by_time(articles, time_range_hours)
+                if not filtered_articles:
+                    st.warning(f"No articles found within the selected time range ({selected_time_range}). Try a larger time range or adjust the date.")
+                else:
+                    articles = filtered_articles
                 articles = pre_process_articles(articles)  # Pre-process (stock prices only)
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
