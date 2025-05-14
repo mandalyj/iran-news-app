@@ -8,13 +8,16 @@ import base64
 from io import BytesIO
 import json
 import os
-import yfinance as yf  # Added for Yahoo Finance integration
+import yfinance as yf
+import asyncio
+import aiohttp
+from concurrent.futures import ThreadPoolExecutor
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - Gnews API, NewsData.io, and NewsAPI as fallback
+# Configuration - Gnews API, NewsData.io, and NewsAPI
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your Gnews API Key
 NEWSDATA_API_URL = "https://newsdata.io/api/1/news"
@@ -28,13 +31,6 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 # Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
-
-# Hugging Face API configuration for DeepSeek
-HUGGINGFACE_API_TOKEN = "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"  # Your Hugging Face API token
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/deepseek-ai/deepseek-v2"
-
-# LibreTranslate API (public instance for testing)
-LIBRETRANSLATE_API_URL = "https://libretranslate.de/translate"
 
 # Initialize Streamlit page with custom CSS
 st.set_page_config(
@@ -108,10 +104,10 @@ def save_chat_ids(chat_ids):
     except Exception as e:
         logger.warning(f"Error saving chat IDs to file: {str(e)}")
 
-# Step 1: Fetch news from Gnews API
-def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+# Asynchronous fetch functions using aiohttp
+async def fetch_gnews_async(session, query="Iran", max_records=20, days_back=7):
     """
-    Fetch news articles from Gnews API related to the given query
+    Fetch news articles from Gnews API asynchronously
     """
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
         error_msg = "Invalid Gnews API key. Please set a valid API key."
@@ -119,25 +115,24 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
         return [], error_msg
     
     today = datetime.utcnow()
-    week_ago = today - timedelta(days=days_back)
-    from_date = week_ago.strftime("%Y-%m-%dT%H:%M:%SZ")
+    from_date = (today - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    to_date = today.strftime("%Y-%m-%dT%H:%M:%SZ")
     
-    st.info(f"Fetching news for query '{query}' from the past {days_back} days using GNews")
+    params = {
+        "q": query,
+        "apikey": GNEWS_API_KEY,
+        "lang": "en",
+        "country": "us",
+        "max": min(max_records, 100),
+        "from": from_date,
+        "to": to_date
+    }
+    logger.info(f"Sending GNews request with params: {params}")
     
-    for attempt in range(retries):
-        try:
-            params = {
-                "q": query,
-                "apikey": GNEWS_API_KEY,
-                "lang": "en",
-                "country": "us",
-                "max": min(max_records, 100),
-                "from": from_date
-            }
-            logger.info(f"Sending GNews request with params: {params}")
-            response = requests.get(GNEWS_API_URL, params=params, timeout=15)
+    try:
+        async with session.get(GNEWS_API_URL, params=params, timeout=15) as response:
             response.raise_for_status()
-            data = response.json()
+            data = await response.json()
             logger.info(f"GNews response: {data}")
             
             if "errors" in data:
@@ -147,7 +142,7 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
                 
             articles = data.get("articles", [])
             if not articles:
-                error_msg = f"No articles found for query '{query}'."
+                error_msg = f"No articles found for query '{query}' in GNews."
                 logger.warning(error_msg)
                 return [], error_msg
                 
@@ -165,55 +160,33 @@ def fetch_gnews(query="Iran", max_records=20, days_back=7, retries=3, backoff_fa
                 }
                 for a in articles
             ], None
-            
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTPError in GNews: {str(e)}")
-            if e.response.status_code == 429:
-                sleep_time = backoff_factor * (2 ** attempt)
-                logger.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                time.sleep(sleep_time)
-            elif e.response.status_code == 401:
-                error_msg = "Unauthorized: Invalid Gnews API key."
-                logger.error(error_msg)
-                return [], error_msg
-            else:
-                error_msg = f"Failed to fetch Gnews: {str(e)}"
-                return [], error_msg
-        except Exception as e:
-            error_msg = f"Unexpected error in GNews: {str(e)}"
-            logger.error(error_msg)
-            return [], error_msg
-            
-    error_msg = f"Failed to fetch Gnews after {retries} attempts"
-    logger.error(error_msg)
-    return [], error_msg
+    except Exception as e:
+        error_msg = f"Error fetching GNews: {str(e)}"
+        logger.error(error_msg)
+        return [], error_msg
 
-# Fallback 1: Fetch news from NewsData.io
-def fetch_newsdata(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+async def fetch_newsdata_async(session, query="Iran", max_records=20, days_back=7):
     """
-    Fetch news articles from NewsData.io API as a fallback
+    Fetch news articles from NewsData.io API asynchronously
     """
     if not NEWSDATA_API_KEY or NEWSDATA_API_KEY == "pub_8684512de957559ac735ec05209d0f3c52303":
         error_msg = "Invalid NewsData.io API key. Please set a valid API key."
         logger.error(error_msg)
         return [], error_msg
     
-    st.info(f"Fetching news for query '{query}' from the past {days_back} days using NewsData.io")
+    params = {
+        "q": query,
+        "apikey": NEWSDATA_API_KEY,
+        "language": "en",
+        "country": "us",
+        "page_size": min(max_records, 50)
+    }
+    logger.info(f"Sending NewsData.io request with params: {params}")
     
-    for attempt in range(retries):
-        try:
-            params = {
-                "q": query,
-                "apikey": NEWSDATA_API_KEY,
-                "language": "en",
-                "country": "us",
-                "page_size": min(max_records, 50)  # NewsData.io free plan limit
-            }
-            logger.info(f"Sending NewsData.io request with params: {params}")
-            response = requests.get(NEWSDATA_API_URL, params=params, timeout=15)
+    try:
+        async with session.get(NEWSDATA_API_URL, params=params, timeout=15) as response:
             response.raise_for_status()
-            data = response.json()
+            data = await response.json()
             logger.info(f"NewsData.io response: {data}")
             
             if data.get("status") != "success":
@@ -223,7 +196,7 @@ def fetch_newsdata(query="Iran", max_records=20, days_back=7, retries=3, backoff
                 
             articles = data.get("results", [])
             if not articles:
-                error_msg = f"No articles found for query '{query}'."
+                error_msg = f"No articles found for query '{query}' in NewsData.io."
                 logger.warning(error_msg)
                 return [], error_msg
                 
@@ -241,59 +214,39 @@ def fetch_newsdata(query="Iran", max_records=20, days_back=7, retries=3, backoff
                 }
                 for a in articles
             ], None
-            
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTPError in NewsData.io: {str(e)}")
-            if e.response.status_code == 429:
-                sleep_time = backoff_factor * (2 ** attempt)
-                logger.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                time.sleep(sleep_time)
-            elif e.response.status_code == 401:
-                error_msg = "Unauthorized: Invalid NewsData.io API key."
-                logger.error(error_msg)
-                return [], error_msg
-            else:
-                error_msg = f"Failed to fetch NewsData.io: {str(e)}"
-                return [], error_msg
-        except Exception as e:
-            error_msg = f"Unexpected error in NewsData.io: {str(e)}"
-            logger.error(error_msg)
-            return [], error_msg
-            
-    error_msg = f"Failed to fetch NewsData.io after {retries} attempts"
-    logger.error(error_msg)
-    return [], error_msg
+    except Exception as e:
+        error_msg = f"Error fetching NewsData.io: {str(e)}"
+        logger.error(error_msg)
+        return [], error_msg
 
-# Fallback 2: Fetch news from NewsAPI
-def fetch_newsapi(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+async def fetch_newsapi_async(session, query="Iran", max_records=20, days_back=7):
     """
-    Fetch news articles from NewsAPI as a second fallback
+    Fetch news articles from NewsAPI asynchronously
     """
     if not NEWSAPI_KEY or NEWSAPI_KEY == "YOUR_NEWSAPI_KEY":
         error_msg = "Invalid NewsAPI key. Please set a valid API key."
         logger.error(error_msg)
         return [], error_msg
     
-    st.info(f"Fetching news for query '{query}' from the past {days_back} days using NewsAPI")
-    
     today = datetime.utcnow()
     from_date = (today - timedelta(days=days_back)).strftime("%Y-%m-%d")
+    to_date = today.strftime("%Y-%m-%d")
     
-    for attempt in range(retries):
-        try:
-            params = {
-                "q": query,
-                "apiKey": NEWSAPI_KEY,
-                "language": "en",
-                "from": from_date,
-                "pageSize": min(max_records, 100),  # NewsAPI free plan limit
-                "sortBy": "publishedAt"
-            }
-            logger.info(f"Sending NewsAPI request with params: {params}")
-            response = requests.get(NEWSAPI_URL, params=params, timeout=15)
+    params = {
+        "q": query,
+        "apiKey": NEWSAPI_KEY,
+        "language": "en",
+        "from": from_date,
+        "to": to_date,
+        "pageSize": min(max_records, 100),
+        "sortBy": "publishedAt"
+    }
+    logger.info(f"Sending NewsAPI request with params: {params}")
+    
+    try:
+        async with session.get(NEWSAPI_URL, params=params, timeout=15) as response:
             response.raise_for_status()
-            data = response.json()
+            data = await response.json()
             logger.info(f"NewsAPI response: {data}")
             
             if data.get("status") != "ok":
@@ -303,7 +256,7 @@ def fetch_newsapi(query="Iran", max_records=20, days_back=7, retries=3, backoff_
                 
             articles = data.get("articles", [])
             if not articles:
-                error_msg = f"No articles found for query '{query}'."
+                error_msg = f"No articles found for query '{query}' in NewsAPI."
                 logger.warning(error_msg)
                 return [], error_msg
                 
@@ -321,59 +274,67 @@ def fetch_newsapi(query="Iran", max_records=20, days_back=7, retries=3, backoff_
                 }
                 for a in articles
             ], None
-            
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"HTTPError in NewsAPI: {str(e)}")
-            if e.response.status_code == 429:
-                sleep_time = backoff_factor * (2 ** attempt)
-                logger.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                st.warning(f"Rate limit hit, retrying in {sleep_time} seconds...")
-                time.sleep(sleep_time)
-            elif e.response.status_code == 401:
-                error_msg = "Unauthorized: Invalid NewsAPI key."
-                logger.error(error_msg)
-                return [], error_msg
-            else:
-                error_msg = f"Failed to fetch NewsAPI: {str(e)}"
-                return [], error_msg
-        except Exception as e:
-            error_msg = f"Unexpected error in NewsAPI: {str(e)}"
-            logger.error(error_msg)
-            return [], error_msg
-            
-    error_msg = f"Failed to fetch NewsAPI after {retries} attempts"
-    logger.error(error_msg)
-    return [], error_msg
+    except Exception as e:
+        error_msg = f"Error fetching NewsAPI: {str(e)}"
+        logger.error(error_msg)
+        return [], error_msg
 
-# Wrapper function to try GNews first, then NewsData.io, then NewsAPI
-def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_factor=5):
+# Fetch news from all APIs in parallel
+async def fetch_news_parallel(query="Iran", max_records=20, days_back=7):
     """
-    Try fetching news from GNews, fall back to NewsData.io, then NewsAPI if both fail
+    Fetch news from all APIs in parallel and combine results
     """
-    st.write("Starting news fetch process...")
-    # Try GNews
-    articles, error = fetch_gnews(query, max_records, days_back, retries, backoff_factor)
-    if articles:
-        st.write(f"Successfully fetched {len(articles)} articles from GNews!")
-        return articles
-    st.error(f"GNews failed: {error}")
-    logger.info("Falling back to NewsData.io API")
+    async with aiohttp.ClientSession() as session:
+        tasks = [
+            fetch_gnews_async(session, query, max_records, days_back),
+            fetch_newsdata_async(session, query, max_records, days_back),
+            fetch_newsapi_async(session, query, max_records, days_back)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        all_articles = []
+        errors = []
+        
+        for result in results:
+            if isinstance(result, tuple):
+                articles, error = result
+                if articles:
+                    all_articles.extend(articles)
+                if error:
+                    errors.append(error)
+            else:
+                errors.append(str(result))
+        
+        # Remove duplicates based on URL
+        seen_urls = set()
+        unique_articles = []
+        for article in all_articles:
+            if article["url"] not in seen_urls:
+                seen_urls.add(article["url"])
+                unique_articles.append(article)
+        
+        return unique_articles, errors
+
+# Synchronous wrapper for Streamlit
+def fetch_news(query="Iran", max_records=20, days_back=7):
+    """
+    Synchronous wrapper to run the async fetch_news_parallel
+    """
+    st.write("Starting news fetch process (parallel)...")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    articles, errors = loop.run_until_complete(fetch_news_parallel(query, max_records, days_back))
+    loop.close()
     
-    # Try NewsData.io
-    articles, error = fetch_newsdata(query, max_records, days_back, retries, backoff_factor)
-    if articles:
-        st.write(f"Successfully fetched {len(articles)} articles from NewsData.io!")
-        return articles
-    st.error(f"NewsData.io failed: {error}")
-    logger.info("Falling back to NewsAPI")
+    for error in errors:
+        st.error(error)
     
-    # Try NewsAPI
-    articles, error = fetch_newsapi(query, max_records, days_back, retries, backoff_factor)
     if articles:
-        st.write(f"Successfully fetched {len(articles)} articles from NewsAPI!")
-        return articles
-    st.error(f"NewsAPI failed: {error}")
-    return []
+        st.write(f"Successfully fetched {len(articles)} unique articles from all APIs!")
+    else:
+        st.warning("No articles fetched from any API.")
+    
+    return articles
 
 # Function to convert UTC time to Tehran time
 def convert_to_tehran_time(utc_time_str):
@@ -387,59 +348,6 @@ def convert_to_tehran_time(utc_time_str):
     except Exception as e:
         logger.warning(f"Error converting time: {str(e)}")
         return utc_time_str
-
-# Function to translate text using DeepSeek via Hugging Face API or LibreTranslate as fallback
-def translate_text(text, target_lang="fa"):
-    """
-    Translate text to target language using DeepSeek via Hugging Face API or LibreTranslate as fallback
-    """
-    if not text or len(text.strip()) < 1:
-        return ""
-    
-    # First attempt: Try DeepSeek via Hugging Face API
-    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-    prompt = f"Translate this text to Persian: {text}"
-    data = {
-        "inputs": prompt,
-        "parameters": {"max_length": 200}
-    }
-    
-    try:
-        response = requests.post(HUGGINGFACE_API_URL, headers=headers, json=data, timeout=10)
-        response.raise_for_status()
-        result = response.json()
-        logger.info(f"DeepSeek response: {result}")
-        if isinstance(result, list) and len(result) > 0:
-            translated = result[0].get("generated_text", "")
-            translated = translated.replace(prompt, "").strip()
-            if translated and translated != text:  # Check if translation is meaningful
-                return translated
-        logger.warning("DeepSeek translation failed or returned empty result")
-    except Exception as e:
-        logger.error(f"Error translating with DeepSeek: {str(e)}")
-    
-    # Fallback: Try LibreTranslate
-    try:
-        data = {
-            "q": text,
-            "source": "en",
-            "target": target_lang,
-            "format": "text"
-        }
-        response = requests.post(LIBRETRANSLATE_API_URL, json=data, timeout=10)
-        response.raise_for_status()
-        result = response.json()
-        logger.info(f"LibreTranslate response: {result}")
-        if "translatedText" in result:
-            translated = result["translatedText"].strip()
-            if translated:
-                return translated
-        logger.warning("LibreTranslate translation failed or returned empty result")
-    except Exception as e:
-        logger.error(f"Error translating with LibreTranslate: {str(e)}")
-    
-    # Final fallback: Return original text with a message
-    return f"{text} - ترجمه نشد"
 
 # Function to fetch stock price using yfinance
 def fetch_stock_price(company_name):
@@ -477,67 +385,16 @@ def fetch_stock_price(company_name):
         logger.warning(f"Error fetching stock price for {company_name}: {str(e)}")
         return None, str(e)
 
-# Function to get Chat ID from Telegram username
-def get_chat_id_from_username(username, chat_ids):
-    """
-    Get Chat ID from Telegram username using stored chat IDs or getUpdates
-    """
-    try:
-        if not username.startswith("@"):
-            return None, "Username must start with @ (e.g., @username)"
-        
-        # Remove the @ symbol
-        username = username[1:].lower()
-        
-        # Check if username is already in stored chat IDs
-        if username in chat_ids:
-            return chat_ids[username], None
-        
-        # Use getUpdates to check for recent chats
-        url = f"{TELEGRAM_API_URL}/getUpdates"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        
-        if not data.get("ok"):
-            return None, "Failed to fetch updates from Telegram"
-        
-        # Look for the username in recent updates
-        for update in data.get("result", []):
-            if "message" in update and "chat" in update["message"]:
-                chat = update["message"]["chat"]
-                if chat.get("username", "").lower() == username:
-                    chat_id = chat["id"]
-                    chat_ids[username] = chat_id
-                    save_chat_ids(chat_ids)
-                    return chat_id, None
-                # Check if it's a group with the username
-                if chat.get("type") == "group" or chat.get("type") == "supergroup":
-                    if chat.get("title", "").lower().find(username.lower()) != -1:
-                        chat_id = chat["id"]
-                        chat_ids[username] = chat_id
-                        save_chat_ids(chat_ids)
-                        return chat_id, None
-        
-        return None, f"Chat ID not found for username @{username}. Make sure the user/group has interacted with the bot."
-    except Exception as e:
-        logger.warning(f"Error fetching Chat ID for username {username}: {str(e)}")
-        return None, str(e)
-
-# Function to pre-translate articles and fetch stock prices
+# Function to pre-process articles (stock prices only, translation disabled)
 def pre_process_articles(articles):
     """
-    Pre-translate titles and descriptions, and fetch stock prices for all articles
+    Pre-process articles by fetching stock prices (translation disabled for now)
     """
-    st.write("Starting pre-processing of articles...")
+    st.write("Starting pre-processing of articles (stock prices only)...")
     for i, article in enumerate(articles):
         st.write(f"Processing article {i+1}/{len(articles)}: {article['title']}")
         try:
-            if not article.get("translated_title"):
-                article["translated_title"] = translate_text(article["title"])
-            if not article.get("translated_description"):
-                article["translated_description"] = translate_text(article["description"])
-            # Try to fetch stock price based on article title
+            # Fetch stock price based on article title
             stock_price, error = fetch_stock_price(article["title"])
             if stock_price is not None:
                 article["stock_price"] = stock_price
@@ -545,15 +402,18 @@ def pre_process_articles(articles):
                 article["stock_price"] = None
                 if error:
                     logger.warning(f"Stock price fetch error for {article['title']}: {error}")
+            # Set empty translations (disabled for now)
+            article["translated_title"] = article["title"]
+            article["translated_description"] = article["description"]
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
     st.write("Pre-processing completed.")
     return articles
 
-# Function to display news articles in a nice format with translations and stock prices
+# Function to display news articles in a nice format
 def display_news_articles(articles):
-    """Display news articles in a structured format with Persian translations and stock prices"""
+    """Display news articles in a structured format"""
     st.write(f"Attempting to display {len(articles)} articles...")
     if not articles:
         st.warning("No news articles to display")
@@ -667,6 +527,53 @@ def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     except Exception as e:
         return False, f"Unexpected error: {str(e)}"
 
+# Function to get Chat ID from Telegram username
+def get_chat_id_from_username(username, chat_ids):
+    """
+    Get Chat ID from Telegram username using stored chat IDs or getUpdates
+    """
+    try:
+        if not username.startswith("@"):
+            return None, "Username must start with @ (e.g., @username)"
+        
+        # Remove the @ symbol
+        username = username[1:].lower()
+        
+        # Check if username is already in stored chat IDs
+        if username in chat_ids:
+            return chat_ids[username], None
+        
+        # Use getUpdates to check for recent chats
+        url = f"{TELEGRAM_API_URL}/getUpdates"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get("ok"):
+            return None, "Failed to fetch updates from Telegram"
+        
+        # Look for the username in recent updates
+        for update in data.get("result", []):
+            if "message" in update and "chat" in update["message"]:
+                chat = update["message"]["chat"]
+                if chat.get("username", "").lower() == username:
+                    chat_id = chat["id"]
+                    chat_ids[username] = chat_id
+                    save_chat_ids(chat_ids)
+                    return chat_id, None
+                # Check if it's a group with the username
+                if chat.get("type") == "group" or chat.get("type") == "supergroup":
+                    if chat.get("title", "").lower().find(username.lower()) != -1:
+                        chat_id = chat["id"]
+                        chat_ids[username] = chat_id
+                        save_chat_ids(chat_ids)
+                        return chat_id, None
+        
+        return None, f"Chat ID not found for username @{username}. Make sure the user/group has interacted with the bot."
+    except Exception as e:
+        logger.warning(f"Error fetching Chat ID for username {username}: {str(e)}")
+        return None, str(e)
+
 # Main Streamlit app
 def main():
     st.title("Iran News Aggregator")
@@ -689,8 +596,8 @@ def main():
     with st.sidebar:
         st.header("Query Settings")
         query = st.text_input("Search Query", value="Iran", key="search_query").strip()
-        days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7, key="days_back")
-        max_articles = st.slider(label="Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
+        days_back = st.slider("Days to look back", min_value=0, max_value=30, value=0, key="days_back")
+        max_articles = st.slider(label="Maximum number of articles per API", min_value=5, max_value=100, value=20, key="max_articles")
         
         # Add search button
         search_button = st.button("Search for News")
@@ -733,7 +640,7 @@ def main():
             st.write("Fetch process completed.")
             if articles:
                 st.write(f"Fetched {len(articles)} articles. Starting pre-processing...")
-                articles = pre_process_articles(articles)  # Pre-translate and fetch stock prices
+                articles = pre_process_articles(articles)  # Pre-process (stock prices only)
                 st.write(f"Pre-processing done. Saving {len(articles)} articles to session state...")
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
