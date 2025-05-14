@@ -262,7 +262,7 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     if unique_articles:
         st.write(f"Successfully fetched {len(unique_articles)} unique articles from all APIs!")
     else:
-        st.warning("No articles fetched from any API.")
+        st.warning("No articles fetched from any API. This might be due to API indexing delays. Try adjusting the date range (e.g., search for articles from a few days ago).")
     
     return unique_articles
 
@@ -524,7 +524,8 @@ def main():
         st.header("Query Settings")
         query = st.text_input("Search Query", value="Iran", key="search_query").strip()
         today = datetime(2025, 5, 14)  # Today's date (May 14, 2025)
-        start_date = st.date_input("Start Date", value=today, min_value=today - timedelta(days=30), max_value=today, key="start_date")
+        default_start_date = today - timedelta(days=7)  # Default to 7 days ago
+        start_date = st.date_input("Start Date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today, key="start_date")
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=today, key="end_date")
         max_articles = st.slider(label="Maximum number of articles per API", min_value=5, max_value=100, value=20, key="max_articles")
         
