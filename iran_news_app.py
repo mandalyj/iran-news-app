@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your Gnews API Key
 NEWSDATA_API_URL = "https://newsdata.io/api/1/news"
-NEWSDATA_API_KEY = "pub_8684512de957559ac735ec05209d0f3c52303"  # Your NewsData.io API Key
+NEWSDATA_API_KEY = os.environ.get("NEWSDATA_API_KEY", "pub_8684512de957559ac735ec05209d0f3c52303")  # Your NewsData.io API Key
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
@@ -579,7 +579,7 @@ def main():
         st.header("Query Settings")
         query = st.text_input("Search Query", value="Iran", key="search_query").strip()
         days_back = st.slider("Days to look back", min_value=1, max_value=30, value=7, key="days_back")
-        max_articles = st.slider("Maximum number of articles", min_value=5, max_value100, value=20, key="max_articles")
+        max_articles = st.slider(label="Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
         
         # Add search button
         search_button = st.button("Search for News")
