@@ -350,9 +350,11 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     """
     Try fetching news from GNews, fall back to NewsData.io, then NewsAPI if both fail
     """
+    st.write("Starting news fetch process...")
     # Try GNews
     articles, error = fetch_gnews(query, max_records, days_back, retries, backoff_factor)
     if articles:
+        st.write("Successfully fetched from GNews!")
         return articles
     st.error(f"GNews failed: {error}")
     logger.info("Falling back to NewsData.io API")
@@ -360,6 +362,7 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     # Try NewsData.io
     articles, error = fetch_newsdata(query, max_records, days_back, retries, backoff_factor)
     if articles:
+        st.write("Successfully fetched from NewsData.io!")
         return articles
     st.error(f"NewsData.io failed: {error}")
     logger.info("Falling back to NewsAPI")
@@ -367,6 +370,7 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     # Try NewsAPI
     articles, error = fetch_newsapi(query, max_records, days_back, retries, backoff_factor)
     if articles:
+        st.write("Successfully fetched from NewsAPI!")
         return articles
     st.error(f"NewsAPI failed: {error}")
     return []
@@ -714,12 +718,15 @@ def main():
     # Execute search when button is clicked
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
+            st.write("Fetching news started...")
             articles = fetch_news(query=query, max_records=max_articles, days_back=days_back)
+            st.write("Fetch process completed.")
             if articles:
                 articles = pre_process_articles(articles)  # Pre-translate and fetch stock prices
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
+                st.success("Articles fetched successfully!")
             else:
                 st.warning("No articles fetched. Check the error messages above or try a different query.")
     
