@@ -354,7 +354,7 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     # Try GNews
     articles, error = fetch_gnews(query, max_records, days_back, retries, backoff_factor)
     if articles:
-        st.write("Successfully fetched from GNews!")
+        st.write(f"Successfully fetched {len(articles)} articles from GNews!")
         return articles
     st.error(f"GNews failed: {error}")
     logger.info("Falling back to NewsData.io API")
@@ -362,7 +362,7 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     # Try NewsData.io
     articles, error = fetch_newsdata(query, max_records, days_back, retries, backoff_factor)
     if articles:
-        st.write("Successfully fetched from NewsData.io!")
+        st.write(f"Successfully fetched {len(articles)} articles from NewsData.io!")
         return articles
     st.error(f"NewsData.io failed: {error}")
     logger.info("Falling back to NewsAPI")
@@ -370,7 +370,7 @@ def fetch_news(query="Iran", max_records=20, days_back=7, retries=3, backoff_fac
     # Try NewsAPI
     articles, error = fetch_newsapi(query, max_records, days_back, retries, backoff_factor)
     if articles:
-        st.write("Successfully fetched from NewsAPI!")
+        st.write(f"Successfully fetched {len(articles)} articles from NewsAPI!")
         return articles
     st.error(f"NewsAPI failed: {error}")
     return []
@@ -529,24 +529,32 @@ def pre_process_articles(articles):
     """
     Pre-translate titles and descriptions, and fetch stock prices for all articles
     """
-    for article in articles:
-        if not article.get("translated_title"):
-            article["translated_title"] = translate_text(article["title"])
-        if not article.get("translated_description"):
-            article["translated_description"] = translate_text(article["description"])
-        # Try to fetch stock price based on article title
-        stock_price, error = fetch_stock_price(article["title"])
-        if stock_price is not None:
-            article["stock_price"] = stock_price
-        else:
-            article["stock_price"] = None
-            if error:
-                logger.warning(f"Stock price fetch error for {article['title']}: {error}")
+    st.write("Starting pre-processing of articles...")
+    for i, article in enumerate(articles):
+        st.write(f"Processing article {i+1}/{len(articles)}: {article['title']}")
+        try:
+            if not article.get("translated_title"):
+                article["translated_title"] = translate_text(article["title"])
+            if not article.get("translated_description"):
+                article["translated_description"] = translate_text(article["description"])
+            # Try to fetch stock price based on article title
+            stock_price, error = fetch_stock_price(article["title"])
+            if stock_price is not None:
+                article["stock_price"] = stock_price
+            else:
+                article["stock_price"] = None
+                if error:
+                    logger.warning(f"Stock price fetch error for {article['title']}: {error}")
+        except Exception as e:
+            st.error(f"Error processing article {article['title']}: {str(e)}")
+            logger.error(f"Error in pre_process_articles: {str(e)}")
+    st.write("Pre-processing completed.")
     return articles
 
 # Function to display news articles in a nice format with translations and stock prices
 def display_news_articles(articles):
     """Display news articles in a structured format with Persian translations and stock prices"""
+    st.write(f"Attempting to display {len(articles)} articles...")
     if not articles:
         st.warning("No news articles to display")
         return
@@ -572,6 +580,7 @@ def display_news_articles(articles):
         cols = st.columns(2)
         with cols[0]:
             article = articles[i]
+            st.write(f"Displaying article {i+1}: {article['title']}")
             is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
             checkbox_key = f"article_{i}"
             if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
@@ -599,6 +608,7 @@ def display_news_articles(articles):
         if i + 1 < len(articles):
             with cols[1]:
                 article = articles[i + 1]
+                st.write(f"Displaying article {i+2}: {article['title']}")
                 is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
                 checkbox_key = f"article_{i+1}"
                 if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
@@ -722,7 +732,9 @@ def main():
             articles = fetch_news(query=query, max_records=max_articles, days_back=days_back)
             st.write("Fetch process completed.")
             if articles:
+                st.write(f"Fetched {len(articles)} articles. Starting pre-processing...")
                 articles = pre_process_articles(articles)  # Pre-translate and fetch stock prices
+                st.write(f"Pre-processing done. Saving {len(articles)} articles to session state...")
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
@@ -732,7 +744,10 @@ def main():
     
     # Always display articles if they exist in session state
     if st.session_state.articles:
+        st.write(f"Found {len(st.session_state.articles)} articles in session state. Displaying now...")
         display_news_articles(st.session_state.articles)
+    else:
+        st.info("No articles to display in session state.")
     
     # Download section in the sidebar
     if st.session_state.articles:
