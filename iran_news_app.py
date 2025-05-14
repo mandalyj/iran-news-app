@@ -15,11 +15,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - GNews API and NewsAPI
+# Configuration - GNews API, NewsAPI, and World News API
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your GNews API Key
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Replace with your NewsAPI Key
+WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
+WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "f1c5582e0ad149e0b8af84eb7659dc38")  # Your World News API Key
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
@@ -176,10 +178,13 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
         "pageSize": min(max_records, 100),
         "sortBy": "publishedAt"
     }
+    headers = {
+        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
+    }
     logger.info(f"Sending NewsAPI request with params: {params}")
     
     try:
-        response = requests.get(NEWSAPI_URL, params=params, timeout=15)
+        response = requests.get(NEWSAPI_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         logger.info(f"NewsAPI response: {data}")
@@ -214,6 +219,67 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
         logger.error(error_msg)
         return [], error_msg
 
+# Fetch news from World News API
+def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
+    """
+    Fetch news articles from World News API
+    """
+    if not WORLDNEWS_API_KEY or WORLDNEWS_API_KEY == "YOUR_WORLDNEWS_API_KEY":
+        error_msg = "Invalid World News API key. Please set a valid API key."
+        logger.error(error_msg)
+        return [], error_msg
+    
+    params = {
+        "text": query,
+        "api-key": WORLDNEWS_API_KEY,
+        "language": "en",
+        "number": min(max_records, 100),
+        "sort": "publish-time",
+        "sort-direction": "DESC",
+        "start-date": from_date,
+        "end-date": to_date
+    }
+    headers = {
+        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
+    }
+    logger.info(f"Sending World News API request with params: {params}")
+    
+    try:
+        response = requests.get(WORLDNEWS_API_URL, params=params, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"World News API response: {data}")
+        
+        if "error" in data:
+            error_msg = f"World News API error: {data.get('error', 'Unknown error')}"
+            logger.error(error_msg)
+            return [], error_msg
+            
+        articles = data.get("news", [])
+        if not articles:
+            error_msg = f"No articles found for query '{query}' in World News API."
+            logger.warning(error_msg)
+            return [], error_msg
+            
+        return [
+            {
+                "title": a.get("title", "No title"),
+                "url": a.get("url", ""),
+                "source": a.get("source", "Unknown Source"),
+                "published_at": a.get("publish_date", ""),
+                "description": a.get("text", "") or "No description available",
+                "image_url": a.get("image", ""),
+                "translated_title": "",
+                "translated_description": "",
+                "stock_price": None
+            }
+            for a in articles
+        ], None
+    except Exception as e:
+        error_msg = f"Error fetching World News API: {str(e)}"
+        logger.error(error_msg)
+        return [], error_msg
+
 # Fetch news from all APIs in parallel using ThreadPoolExecutor
 def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     """
@@ -222,13 +288,14 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     st.write("Starting news fetch process (parallel)...")
     fetch_functions = [
         (fetch_gnews, "GNews"),
-        (fetch_newsapi, "NewsAPI")
+        (fetch_newsapi, "NewsAPI"),
+        (fetch_worldnews, "World News API")
     ]
     
     all_articles = []
     errors = []
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         future_to_api = {
             executor.submit(func, query, max_records, from_date, to_date): name
             for func, name in fetch_functions
