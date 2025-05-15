@@ -628,7 +628,7 @@ def save_articles_to_file_for_download(articles, format="csv"):
         return json.dumps(articles, indent=2)
     return None
 
-# Function to send a message to Telegram (include title, time, description, and Instant View)
+# Function to send a message to Telegram (include title, description, time, and Instant View)
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
@@ -840,7 +840,22 @@ def main():
                 for article in st.session_state.selected_articles:
                     tehran_time = parse_to_tehran_time(article["published_at"])
                     tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
-                    truncated_description = truncate_text(article["translated_description"] or article["description"], max_length=100)
+                    
+                    # Check if the article has been translated; if not, translate it
+                    final_title = article["translated_title"] or article["title"]
+                    final_description = article["translated_description"] or article["description"]
+                    
+                    if not final_title or final_title == article["title"]:
+                        final_title = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                        logger.info(f"Translated title for Telegram: {final_title}")
+                        article["translated_title"] = final_title  # Update the article with the new translation
+                    
+                    if not final_description or final_description == article["description"]:
+                        final_description = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                        logger.info(f"Translated description for Telegram: {final_description}")
+                        article["translated_description"] = final_description  # Update the article with the new translation
+                    
+                    truncated_description = truncate_text(final_description, max_length=100)
                     
                     # Extract content for Instant View
                     article_content = extract_article_content(article["url"])
@@ -848,10 +863,11 @@ def main():
                     translated_content = translate_with_avalai(article_content, source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
                     logger.info(f"Translated Instant View content (length: {len(translated_content)}): {translated_content}")
                     
+                    # Construct the message with the new order: Title -> Description -> Time -> Instant View -> Link
                     message = (
-                        f"*{article['translated_title'] or article['title']}*\n\n"
-                        f"**زمان انتشار:** {tehran_time_str}\n\n"
+                        f"*{final_title}*\n\n"
                         f"{truncated_description}\n\n"
+                        f"**زمان انتشار:** {tehran_time_str}\n\n"
                         f"**پیش‌نمایش مقاله (Instant View):**\n{translated_content}\n\n"
                         f"[ادامه مطلب]({article['url']})"
                     )
