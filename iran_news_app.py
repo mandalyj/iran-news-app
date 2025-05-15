@@ -56,8 +56,7 @@ st.markdown(
         padding: 0px;
         background-color: #f9f9f9;
     }
-    .neon-line-top,
-    .neon-line-bottom {
+    .neon-line-top {
         height: 4px;
         background: linear-gradient(90deg, rgba(255, 0, 0, 0.8), rgba(255, 100, 100, 0.8), rgba(255, 0, 0, 0.8));
         box-shadow: 0 0 10px rgba(255, 0, 0, 0.7), 0 0 20px rgba(255, 0, 0, 0.5), 0 0 30px rgba(255, 100, 100, 0.3);
@@ -562,8 +561,6 @@ def display_news_articles(articles):
                     st.info("Image could not be loaded")
             st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
-            # Neon line below the Persian description
-            st.markdown(f'<div class="neon-line-bottom"></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file for download
