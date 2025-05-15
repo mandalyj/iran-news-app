@@ -565,7 +565,24 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             return []
         
         fetch_query = query if selected_api != "Financial Report (FMP)" else query.upper()
-        items, error = fetch_function(fetch_query, max_records, from_date, to_date)
+        result = fetch_function(fetch_query, max_records, from_date, to_date)
+        
+        # Ensure the result is a tuple (items, error)
+        if not isinstance(result, tuple) or len(result) != 2:
+            error_msg = f"Unexpected return format from {selected_api}: {result}"
+            logger.error(error_msg)
+            st.error(error_msg)
+            return []
+        
+        items, error = result
+        logger.info(f"Raw fetch result from {selected_api}: items={items}, error={error}")
+        
+        if not isinstance(items, list):
+            error_msg = f"Fetch function {selected_api} did not return a list: {items}"
+            logger.error(error_msg)
+            st.error(error_msg)
+            return []
+        
         st.write(f"Fetched {len(items)} items from {selected_api}")
         logger.info(f"Fetched {len(items)} items from {selected_api}")
         if items:
@@ -869,7 +886,9 @@ def display_items(items):
                 with col1:
                     st.bar_chart(sources.set_index("Source"))
                 with col2:
-                    st.dataframe(sources)
+                    st.data
+
+frame(sources)
             else:
                 st.write(f"All articles from: {sources.iloc[0, 0]}")
             
@@ -1038,6 +1057,7 @@ def main():
     try:
         st.title("Iran News Aggregator")
         
+        # Initialize session state variables
         if 'selected_items' not in st.session_state:
             st.session_state.selected_items = []
         if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
@@ -1052,6 +1072,7 @@ def main():
             logger.warning("st.session_state.items is not a list, resetting to empty list")
             st.session_state.items = []
         
+        logger.info(f"Session state items at start: {st.session_state.items}")
         if not st.session_state.items:
             st.info("No items in session state. Please search for news/reports or check if data was loaded from file.")
             logger.info("No items in session state at start.")
@@ -1138,7 +1159,15 @@ def main():
                 to_date = end_date.strftime("%Y-%m-%d")
                 fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
                 items = fetch_news(selected_api, query=fetch_query, max_records=max_items, from_date=from_date, to_date=to_date)
-                if items and isinstance(items, list):
+                
+                logger.info(f"Items returned from fetch_news: {items}, Type: {type(items)}")
+                
+                if not isinstance(items, list):
+                    logger.error(f"fetch_news did not return a list: {items}")
+                    st.error(f"Failed to fetch items: fetch_news did not return a list, got {type(items)} instead.")
+                    items = []
+                
+                if items:
                     logger.info(f"Before filtering: {len(items)} items")
                     filtered_items = filter_articles_by_time(items, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
                     if not filtered_items and selected_api != "Financial Report (FMP)":
@@ -1152,12 +1181,13 @@ def main():
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation=enable_translation, num_items_to_translate=num_items_to_translate)
                     logger.info(f"After preprocessing: {len(items)} items")
                     st.session_state.items = items
-                    save_items_to_file(items)
+                    save_articles_to_file(items)
                     st.session_state.selected_items = []
                     st.success("Items fetched successfully!")
                 else:
                     st.warning(f"No items fetched from {selected_api}. Check the error messages above or try a different query or API.")
                     logger.warning(f"No items fetched after fetch_news call from {selected_api}.")
+                    st.session_state.items = []
         
         if st.session_state.items and isinstance(st.session_state.items, list):
             st.write(f"Found {len(st.session_state.items)} items in session state. Displaying now...")
