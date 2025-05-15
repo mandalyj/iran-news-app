@@ -239,7 +239,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "end-date": to_date
     }
     headers = {
-        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
+        "User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     logger.info(f"Sending World News API request with params: {params}")
     
