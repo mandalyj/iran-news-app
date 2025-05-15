@@ -1070,7 +1070,7 @@ def main():
             logger.warning("st.session_state.items is not a list, resetting to empty list")
             st.session_state.items = []
         
-        logger.info(f"Session state items at start: {st.session_state.items}")
+        logger.info(f"Session state items at start: {st.session_state.items}, Type: {type(st.session_state.items)}")
         if not st.session_state.items:
             st.info("No items in session state. Please search for news/reports or check if data was loaded from file.")
             logger.info("No items in session state at start.")
@@ -1160,6 +1160,7 @@ def main():
                 
                 logger.info(f"Items returned from fetch_news: {items}, Type: {type(items)}")
                 
+                # Ensure items is always a list
                 if not isinstance(items, list):
                     logger.error(f"fetch_news did not return a list: {items}")
                     st.error(f"Failed to fetch items: fetch_news did not return a list, got {type(items)} instead.")
@@ -1178,8 +1179,8 @@ def main():
                     logger.info(f"After filtering: {len(items)} items")
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation=enable_translation, num_items_to_translate=num_items_to_translate)
                     logger.info(f"After preprocessing: {len(items)} items")
-                    st.session_state.items = items
-                    save_articles_to_file(items)
+                    st.session_state.items = items if isinstance(items, list) else []
+                    save_articles_to_file(st.session_state.items)
                     st.session_state.selected_items = []
                     st.success("Items fetched successfully!")
                 else:
