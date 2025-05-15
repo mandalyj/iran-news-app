@@ -315,7 +315,7 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
     headers = {
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
-    params devenus = {
+    params = {
         "limit": min(max_records, 100),
     }
     logger.info(f"Sending CoinGecko news request with params: {params}")
