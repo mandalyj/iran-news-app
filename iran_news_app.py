@@ -54,9 +54,26 @@ st.markdown(
     .article-section {
         margin-bottom: 30px;
         padding: 15px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
+        /* Removed border: 1px solid #ddd; */
+        position: relative;
         background-color: #f9f9f9;
+    }
+    .article-section:before,
+    .article-section:after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, rgba(255, 0, 0, 0.8), rgba(255, 100, 100, 0.8), rgba(255, 0, 0, 0.8));
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.7), 0 0 20px rgba(255, 0, 0, 0.5), 0 0 30px rgba(255, 100, 100, 0.3);
+        z-index: 1;
+    }
+    .article-section:before {
+        top: -5px;
+    }
+    .article-section:after {
+        bottom: -5px;
     }
     .title-link {
         font-size: 18px !important;
