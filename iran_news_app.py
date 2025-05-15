@@ -370,16 +370,21 @@ def parse_to_tehran_time(utc_time_str):
         logger.warning("Empty time string provided")
         return None
     
+    # Expanded list of possible time formats
     time_formats = [
-        "%Y-%m-%dT%H:%M:%SZ",
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ",           # 2025-05-14T12:34:56Z
+        "%Y-%m-%d %H:%M:%S",            # 2025-05-14 12:34:56
+        "%Y-%m-%dT%H:%M:%S",            # 2025-05-14T12:34:56
+        "%Y-%m-%dT%H:%M:%S.%fZ",        # 2025-05-14T12:34:56.789Z
+        "%Y-%m-%d %H:%M:%S.%f",         # 2025-05-14 12:34:56.789
+        "%Y-%m-%dT%H:%M:%S%z",          # 2025-05-14T12:34:56+0000
     ]
     
     for time_format in time_formats:
         try:
             utc_time = datetime.strptime(utc_time_str, time_format)
             tehran_time = utc_time + timedelta(hours=3, minutes=30)
+            logger.info(f"Successfully parsed time: {utc_time_str} -> {tehran_time}")
             return tehran_time
         except ValueError:
             continue
@@ -432,6 +437,8 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
                 logger.info(f"Article time: {published_time}, Start: {start_datetime}, End: {end_datetime}")
                 if start_datetime <= published_time <= end_datetime:
                     filtered_articles.append(article)
+            else:
+                logger.warning(f"Skipping article due to unparseable time: {article['published_at']}")
     else:
         cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
         for article in articles:
@@ -440,6 +447,8 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
                 logger.info(f"Article time: {published_time}, Cutoff: {cutoff_time}")
                 if published_time >= cutoff_time:
                     filtered_articles.append(article)
+            else:
+                logger.warning(f"Skipping article due to unparseable time: {article['published_at']}")
     
     logger.info(f"After filtering: {len(filtered_articles)} articles remain out of {len(articles)}")
     return filtered_articles
@@ -478,9 +487,9 @@ def pre_process_articles(articles, avalai_api_url, enable_translation=False, num
             send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
     return sorted_articles
 
-# Function to display news articles in a nice format
+# Function to display news articles in a nice format (two columns)
 def display_news_articles(articles):
-    """Display news articles in a structured format"""
+    """Display news articles in a structured format with two columns"""
     st.write(f"Attempting to display {len(articles)} articles...")
     logger.info(f"Displaying {len(articles)} articles: {articles}")
     
@@ -512,35 +521,42 @@ def display_news_articles(articles):
     st.write(f"You have selected {selected_count} article(s) to send to Telegram")
     
     st.subheader("News Articles")
+    # Create two columns for displaying articles
+    col1, col2 = st.columns(2)
     for i, article in enumerate(sorted_articles):
-        st.write(f"Displaying article {i+1}: {article['title']}")
-        logger.info(f"Rendering article {i+1}: {article['title']}")
+        # Alternate between columns
+        current_col = col1 if i % 2 == 0 else col2
         
-        is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
-        checkbox_key = f"article_{i}"
-        if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-            if not is_selected:
-                st.session_state.selected_articles.append(article)
-        else:
-            if is_selected:
-                st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-        
-        tehran_time = parse_to_tehran_time(article["published_at"])
-        tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
-        truncated_description = truncate_text(article["description"], max_length=100)
-        truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
-        
-        st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-        st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
-        st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-        if article["image_url"]:
-            try:
-                st.image(article["image_url"], width=300)
-            except:
-                st.info("Image could not be loaded")
-        st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        with current_col:
+            st.write(f"Displaying article {i+1}: {article['title']}")
+            logger.info(f"Rendering article {i+1}: {article['title']}")
+            
+            is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
+            checkbox_key = f"article_{i}"
+            if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
+                if not is_selected:
+                    st.session_state.selected_articles.append(article)
+            else:
+                if is_selected:
+                    st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
+            
+            tehran_time = parse_to_tehran_time(article["published_at"])
+            tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
+            truncated_description = truncate_text(article["description"], max_length=100)
+            truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
+            
+            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
+            # Use translated title instead of original title
+            st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["translated_title"]}</a></h3>', unsafe_allow_html=True)
+            st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
+            if article["image_url"]:
+                try:
+                    st.image(article["image_url"], width=300)
+                except:
+                    st.info("Image could not be loaded")
+            st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file for download
 def save_articles_to_file_for_download(articles, format="csv"):
@@ -555,7 +571,7 @@ def save_articles_to_file_for_download(articles, format="csv"):
         return json.dumps(articles, indent=2)
     return None
 
-# Function to send a message to Telegram
+# Function to send a message to Telegram (include both original and translated text)
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
@@ -713,7 +729,10 @@ def main():
                 logger.info(f"Before filtering: {len(articles)} articles")
                 filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
                 if not filtered_articles:
-                    st.warning(f"No articles found within the selected date range ({start_date} to {end_date}). Try adjusting the date range or disabling the time filter.")
+                    if time_range_hours != float("inf"):
+                        st.warning(f"مقاله‌ای در {selected_time_range} گذشته پیدا نشد. لطفاً بازه زمانی را تغییر دهید یا فیلتر زمانی را غیرفعال کنید.")
+                    else:
+                        st.warning(f"No articles found within the selected date range ({start_date} to {end_date}). Try adjusting the date range or disabling the time filter.")
                 else:
                     articles = filtered_articles
                 logger.info(f"After filtering: {len(articles)} articles")
@@ -769,7 +788,14 @@ def main():
                         st.info(f"Sending to Chat ID: {target_chat_id}")
                         
                         for article in st.session_state.selected_articles:
-                            message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
+                            # Include both original and translated text in the message
+                            message = (
+                                f"*{article['title']}*\n\n"
+                                f"{article['description']}\n\n"
+                                f"*عنوان (فارسی):* {article['translated_title']}\n\n"
+                                f"*توضیحات (فارسی):* {article['translated_description']}\n\n"
+                                f"[Read more]({article['url']})"
+                            )
                             st.info(f"Message: {message}")
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
                             if success:
