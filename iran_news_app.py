@@ -8,7 +8,6 @@ import base64
 from io import BytesIO
 import json
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup  # For extracting article content
 
 # Set up logging
@@ -20,6 +19,7 @@ GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
+COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
 AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
 AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")
 
@@ -130,8 +130,8 @@ def save_chat_ids(chat_ids):
         with open(CHAT_IDS_FILE, "w") as f:
             json.dump(chat_ids, f)
     except Exception as e:
-        logger.warning(f"Error saving chat IDs to file: {str(e)}")
-        send_error_email(f"Error saving chat IDs to file: {str(e)}")
+        logger.warning(f"Error saving chat IDs from file: {str(e)}")
+        send_error_email(f"Error saving chat IDs from file: {str(e)}")
 
 # Fetch news from GNews API
 def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
@@ -258,42 +258,100 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         send_error_email(error_msg)
         return [], error_msg
 
-# Fetch news from all APIs in parallel using ThreadPoolExecutor
-def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
+# Fetch crypto news from CoinGecko API
+def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
     """
-    Fetch news from all APIs in parallel and combine results
+    Fetch cryptocurrency news articles from CoinGecko API
     """
-    st.write("Starting news fetch process (parallel)...")
-    logger.info(f"Fetching news for query: {query}, max_records: {max_records}, from_date: {from_date}, to_date: {to_date}")
-    fetch_functions = [
-        (fetch_gnews, "GNews"),
-        (fetch_worldnews, "World News API")
-    ]
+    endpoint = f"{COINGECKO_API_URL}/news"
+    headers = {
+        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
+    }
+    params = {
+        "limit": min(max_records, 100),  # CoinGecko allows limiting the number of results
+    }
+    logger.info(f"Sending CoinGecko news request with params: {params}")
+    
+    try:
+        response = requests.get(endpoint, params=params, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"CoinGecko news response: {data}")
+        
+        articles = data.get("data", [])
+        if not articles:
+            error_msg = f"No articles found for query '{query}' in CoinGecko."
+            logger.warning(error_msg)
+            return [], error_msg
+        
+        formatted_articles = []
+        for a in articles:
+            # Parse CoinGecko news structure
+            published_at = a.get("published_at", "")
+            if from_date and to_date:
+                article_date = parse_to_tehran_time(published_at)
+                if not article_date:
+                    continue
+                start_datetime = datetime.strptime(from_date, "%Y-%m-%d")
+                end_datetime = datetime.strptime(to_date, "%Y-%m-%d")
+                if not (start_datetime <= article_date <= end_datetime):
+                    continue
+            formatted_articles.append({
+                "title": a.get("title", "No title"),
+                "url": a.get("url", ""),
+                "source": a.get("source", "CoinGecko"),
+                "published_at": published_at,
+                "description": a.get("description", "") or "No description available",
+                "image_url": a.get("thumb", ""),
+                "translated_title": "",
+                "translated_description": ""
+            })
+        
+        return formatted_articles, None
+    except Exception as e:
+        error_msg = f"Error fetching CoinGecko news: {str(e)}"
+        logger.error(error_msg)
+        send_error_email(error_msg)
+        return [], error_msg
+
+# Fetch news from the selected API
+def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
+    """
+    Fetch news from the selected API
+    """
+    st.write(f"Starting news fetch process from {selected_api}...")
+    logger.info(f"Fetching news from {selected_api} for query: {query}, max_records: {max_records}, from_date: {from_date}, to_date: {to_date}")
     
     all_articles = []
     errors = []
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        future_to_api = {
-            executor.submit(func, query, max_records, from_date, to_date): name
-            for func, name in fetch_functions
-        }
-        
-        for future in as_completed(future_to_api):
-            api_name = future_to_api[future]
-            try:
-                articles, error = future.result()
-                st.write(f"Fetched {len(articles)} articles from {api_name}")
-                logger.info(f"Fetched {len(articles)} articles from {api_name}")
-                if articles:
-                    all_articles.extend(articles)
-                if error:
-                    errors.append(f"{api_name}: {error}")
-            except Exception as e:
-                error_msg = f"Error fetching from {api_name}: {str(e)}"
-                errors.append(error_msg)
-                st.error(error_msg)
-                send_error_email(error_msg)
+    # Map selected API to the corresponding fetch function
+    api_functions = {
+        "GNews": fetch_gnews,
+        "World News API": fetch_worldnews,
+        "CoinGecko (Crypto News)": fetch_coingecko_news
+    }
+    
+    fetch_function = api_functions.get(selected_api)
+    if not fetch_function:
+        error_msg = f"Invalid API selected: {selected_api}"
+        logger.error(error_msg)
+        st.error(error_msg)
+        return []
+    
+    try:
+        articles, error = fetch_function(query, max_records, from_date, to_date)
+        st.write(f"Fetched {len(articles)} articles from {selected_api}")
+        logger.info(f"Fetched {len(articles)} articles from {selected_api}")
+        if articles:
+            all_articles.extend(articles)
+        if error:
+            errors.append(f"{selected_api}: {error}")
+    except Exception as e:
+        error_msg = f"Error fetching from {selected_api}: {str(e)}"
+        errors.append(error_msg)
+        st.error(error_msg)
+        send_error_email(error_msg)
     
     # Remove duplicates based on URL
     seen_urls = set()
@@ -312,9 +370,9 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
         send_error_email(error)
     
     if unique_articles:
-        st.write(f"Successfully fetched {len(unique_articles)} unique articles from all APIs!")
+        st.write(f"Successfully fetched {len(unique_articles)} unique articles from {selected_api}!")
     else:
-        st.warning("No articles fetched from any API. This might be due to API indexing delays. Try adjusting the date range (e.g., search for articles from a few days ago).")
+        st.warning(f"No articles fetched from {selected_api}. This might be due to API indexing delays. Try adjusting the date range (e.g., search for articles from a few days ago).")
     
     return unique_articles
 
@@ -387,6 +445,7 @@ def parse_to_tehran_time(utc_time_str):
         "%Y-%m-%dT%H:%M:%S.%fZ",        # 2025-05-14T12:34:56.789Z
         "%Y-%m-%d %H:%M:%S.%f",         # 2025-05-14 12:34:56.789
         "%Y-%m-%dT%H:%M:%S%z",          # 2025-05-14T12:34:56+0000
+        "%Y-%m-%dT%H:%M:%S.%f%z"        # 2025-05-14T12:34:56.789+0000 (CoinGecko format)
     ]
     
     for time_format in time_formats:
@@ -717,7 +776,11 @@ def main():
         default_start_date = today - timedelta(days=7)
         start_date = st.date_input("Start Date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today, key="start_date")
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=today, key="end_date")
-        max_articles = st.slider(label="Maximum number of articles per API", min_value=5, max_value=100, value=20, key="max_articles")
+        max_articles = st.slider(label="Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
+        
+        # Add API selection box
+        api_options = ["GNews", "World News API", "CoinGecko (Crypto News)"]
+        selected_api = st.selectbox("Select News API", options=api_options, index=0, key="selected_api")
         
         time_range_options = {
             "Last 30 minutes": 0.5,
@@ -780,11 +843,13 @@ def main():
         st.experimental_rerun()
 
     if search_button:
-        with st.spinner(f"Searching for news about {query}..."):
-            logger.info(f"Search button clicked. Query: {query}, Start Date: {start_date}, End Date: {end_date}, Max Articles: {max_articles}")
+        with st.spinner(f"Searching for news about {query} using {selected_api}..."):
+            logger.info(f"Search button clicked. Query: {query}, API: {selected_api}, Start Date: {start_date}, End Date: {end_date}, Max Articles: {max_articles}")
             from_date = start_date.strftime("%Y-%m-%d")
             to_date = end_date.strftime("%Y-%m-%d")
-            articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
+            # Adjust query for CoinGecko if selected
+            fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
+            articles = fetch_news(selected_api, query=fetch_query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
                 logger.info(f"Before filtering: {len(articles)} articles")
                 filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
@@ -803,8 +868,8 @@ def main():
                 st.session_state.selected_articles = []
                 st.success("Articles fetched successfully!")
             else:
-                st.warning("No articles fetched. Check the error messages above or try a different query.")
-                logger.warning("No articles fetched after fetch_news call.")
+                st.warning(f"No articles fetched from {selected_api}. Check the error messages above or try a different query or API.")
+                logger.warning(f"No articles fetched after fetch_news call from {selected_api}.")
     
     if st.session_state.articles:
         st.write(f"Found {len(st.session_state.articles)} articles in session state. Displaying now...")
