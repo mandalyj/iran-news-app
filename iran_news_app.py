@@ -550,9 +550,9 @@ def display_news_articles(articles):
             truncated_description = truncate_text(article["description"], max_length=100)
             truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
             
-            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-            # Neon line above the title
+            # Neon line above the article section
             st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["translated_title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
             if article["image_url"]:
