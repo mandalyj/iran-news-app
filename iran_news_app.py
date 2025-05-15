@@ -479,13 +479,26 @@ def pre_process_articles(articles, avalai_api_url, enable_translation=False, num
             # Only translate the specified number of newest articles
             if enable_translation and i < num_articles_to_translate:
                 logger.info(f"Translating article {i+1}: {article['title']}")
-                article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-                article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                # Translate title
+                translated_title = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                logger.info(f"Translated title for article {i+1}: {translated_title}")
+                article["translated_title"] = translated_title
+                
+                # Translate description
+                translated_description = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                logger.info(f"Translated description for article {i+1}: {translated_description}")
+                article["translated_description"] = translated_description
+                
+                # Check if translation failed for description
+                if translated_description == article["description"]:
+                    st.warning(f"Translation failed for description of article {i+1}: {article['title']}")
+                    logger.warning(f"Translation failed for description of article {i+1}: {article['title']}")
             else:
                 article["translated_title"] = article["title"]
                 article["translated_description"] = article["description"]
                 if enable_translation and i >= num_articles_to_translate:
                     logger.info(f"Skipping translation for article {i+1}: {article['title']} (beyond limit of {num_articles_to_translate})")
+                    st.info(f"Article {i+1} ({article['title']}) skipped for translation (beyond limit of {num_articles_to_translate})")
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
