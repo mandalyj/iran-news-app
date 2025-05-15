@@ -488,9 +488,7 @@ def pre_process_articles(articles, avalai_api_url, enable_translation=False, num
                     logger.info(f"Skipping translation for article {i+1}: {article['title']} (beyond limit of {num_articles_to_translate})")
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
-            logger.error(f"Error in!!!
-
- pre_process_articles: {str(e)}")
+            logger.error(f"Error in pre_process_articles: {str(e)}")
             send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
     return sorted_articles
 
