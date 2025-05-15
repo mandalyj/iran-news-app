@@ -9,23 +9,32 @@ from io import BytesIO
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import smtplib
+from email.mime.text import MIMEText
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - API keys are fetched from environment variables only
+# Configuration - API keys and email settings are fetched from environment variables
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
-GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")  # Fetch from Render environment
+GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Fetch from Render environment
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
-WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")  # Fetch from Render environment
-AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"  # Default to this, can be changed in UI
-AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")  # Fetch from Render environment
+WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
+AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
+AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")  # Fetch from Render environment
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+
+# Email configuration
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USER = os.environ.get("EMAIL_USER", "your-email@gmail.com")
+EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
+EMAIL_TO = os.environ.get("EMAIL_TO", "avestaparsavic@gmail.com")
 
 # Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
@@ -45,25 +54,41 @@ st.markdown(
     .persian-text {
         direction: rtl;
         text-align: right;
-        font-family: "B Nazanin", "Arial Unicode MS", "Tahoma", sans-serif; /* B Nazanin as Persian font */
-        font-size: 18px !important; /* Persian font size */
+        font-family: "B Nazanin", "Arial Unicode MS", "Tahoma", sans-serif;
+        font-size: 18px !important;
     }
     .english-text {
         direction: ltr;
         text-align: left;
-        font-size: 14px !important; /* English font size */
+        font-size: 14px !important;
     }
     .article-section {
         margin-bottom: 20px;
     }
     .title-link {
-        font-size: 17px !important; /* Increased by 1 unit */
-        font-weight: bold !important; /* Make the title bold */
+        font-size: 17px !important;
+        font-weight: bold !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# Function to send error email
+def send_error_email(error_message):
+    msg = MIMEText(error_message)
+    msg['Subject'] = 'Error in Iran News Aggregator'
+    msg['From'] = EMAIL_USER
+    msg['To'] = EMAIL_TO
+
+    try:
+        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.send_message(msg)
+        logger.info(f"Error email sent to {EMAIL_TO}")
+    except Exception as e:
+        logger.error(f"Failed to send error email: {str(e)}")
 
 # Load articles from temp file if exists
 def load_articles_from_file():
@@ -74,6 +99,7 @@ def load_articles_from_file():
         return []
     except Exception as e:
         logger.warning(f"Error loading articles from file: {str(e)}")
+        send_error_email(f"Error loading articles from file: {str(e)}")
         return []
 
 # Save articles to temp file
@@ -83,6 +109,7 @@ def save_articles_to_file(articles):
             json.dump(articles, f)
     except Exception as e:
         logger.warning(f"Error saving articles to file: {str(e)}")
+        send_error_email(f"Error saving articles to file: {str(e)}")
 
 # Load chat IDs from file
 def load_chat_ids():
@@ -93,6 +120,7 @@ def load_chat_ids():
         return {}
     except Exception as e:
         logger.warning(f"Error loading chat IDs from file: {str(e)}")
+        send_error_email(f"Error loading chat IDs from file: {str(e)}")
         return {}
 
 # Save chat IDs to file
@@ -102,6 +130,7 @@ def save_chat_ids(chat_ids):
             json.dump(chat_ids, f)
     except Exception as e:
         logger.warning(f"Error saving chat IDs to file: {str(e)}")
+        send_error_email(f"Error saving chat IDs to file: {str(e)}")
 
 # Fetch news from GNews API
 def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
@@ -111,6 +140,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
         error_msg = "Invalid GNews API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
     
     params = {
@@ -122,10 +152,13 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "from": from_date,
         "to": to_date
     }
+    headers = {
+        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
+    }
     logger.info(f"Sending GNews request with params: {params}")
     
     try:
-        response = requests.get(GNEWS_API_URL, params=params, timeout=15)
+        response = requests.get(GNEWS_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         logger.info(f"GNews response: {data}")
@@ -133,6 +166,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         if "errors" in data:
             error_msg = f"GNews API error: {data['errors']}"
             logger.error(error_msg)
+            send_error_email(error_msg)
             return [], error_msg
             
         articles = data.get("articles", [])
@@ -157,6 +191,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     except Exception as e:
         error_msg = f"Error fetching GNews: {str(e)}"
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
 
 # Fetch news from NewsAPI
@@ -167,6 +202,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
     if not NEWSAPI_KEY or NEWSAPI_KEY == "YOUR_NEWSAPI_KEY":
         error_msg = "Invalid NewsAPI key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
     
     params = {
@@ -179,7 +215,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
         "sortBy": "publishedAt"
     }
     headers = {
-        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
+        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     logger.info(f"Sending NewsAPI request with params: {params}")
     
@@ -192,6 +228,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
         if data.get("status") != "ok":
             error_msg = f"NewsAPI error: {data.get('message', 'Unknown error')}"
             logger.error(error_msg)
+            send_error_email(error_msg)
             return [], error_msg
             
         articles = data.get("articles", [])
@@ -216,6 +253,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
     except Exception as e:
         error_msg = f"Error fetching NewsAPI: {str(e)}"
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
 
 # Fetch news from World News API
@@ -226,6 +264,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     if not WORLDNEWS_API_KEY or WORLDNEWS_API_KEY == "YOUR_WORLDNEWS_API_KEY":
         error_msg = "Invalid World News API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
     
     params = {
@@ -239,7 +278,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "end-date": to_date
     }
     headers = {
-        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
+        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     logger.info(f"Sending World News API request with params: {params}")
     
@@ -252,6 +291,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         if "error" in data:
             error_msg = f"World News API error: {data.get('error', 'Unknown error')}"
             logger.error(error_msg)
+            send_error_email(error_msg)
             return [], error_msg
             
         articles = data.get("news", [])
@@ -276,6 +316,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     except Exception as e:
         error_msg = f"Error fetching World News API: {str(e)}"
         logger.error(error_msg)
+        send_error_email(error_msg)
         return [], error_msg
 
 # Fetch news from all APIs in parallel using ThreadPoolExecutor
@@ -312,6 +353,7 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
                 error_msg = f"Error fetching from {api_name}: {str(e)}"
                 errors.append(error_msg)
                 st.error(error_msg)
+                send_error_email(error_msg)
     
     # Remove duplicates based on URL
     seen_urls = set()
@@ -323,6 +365,7 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     
     for error in errors:
         st.error(error)
+        send_error_email(error)
     
     if unique_articles:
         st.write(f"Successfully fetched {len(unique_articles)} unique articles from all APIs!")
@@ -331,28 +374,35 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     
     return unique_articles
 
-# Function to translate text using Avalai API
+# Function to translate text using Avalai API with /chat/completions
 def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT):
     """
-    Translate text using Avalai API from source language to target language
+    Translate text using Avalai API's /chat/completions endpoint
     """
     if not text:
         logger.warning("Empty text provided for translation")
         return text
     
     if not AVALAI_API_KEY or AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
-        logger.error("Invalid Avalai API key. Please set a valid API key in Render environment variables.")
+        error_msg = "Invalid Avalai API key. Please set a valid API key in Render environment variables."
+        logger.error(error_msg)
+        send_error_email(error_msg)
         return text
     
-    endpoint = f"{avalai_api_url}/translate"
+    endpoint = f"{avalai_api_url}/chat/completions"
     headers = {
         "Authorization": f"Bearer {AVALAI_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     payload = {
-        "text": text,
-        "source_lang": source_lang,
-        "target_lang": target_lang
+        "model": "gpt-4o",  # Assuming Avalai supports this model
+        "messages": [
+            {
+                "role": "user",
+                "content": f"Translate this text from {source_lang} to {target_lang}: {text}"
+            }
+        ]
     }
     
     try:
@@ -362,13 +412,19 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         data = response.json()
         logger.info(f"Avalai API response: {data}")
         
-        if "translated_text" in data:
-            return data["translated_text"]
+        # Extract translated text from chat/completions response
+        if "choices" in data and len(data["choices"]) > 0:
+            translated_text = data["choices"][0]["message"]["content"]
+            return translated_text
         else:
-            logger.warning(f"Avalai API response missing translated_text: {data}")
+            error_msg = f"Avalai API response missing choices: {data}"
+            logger.warning(error_msg)
+            send_error_email(error_msg)
             return text
     except Exception as e:
-        logger.error(f"Error translating with Avalai: {str(e)}")
+        error_msg = f"Error translating with Avalai: {str(e)}"
+        logger.error(error_msg)
+        send_error_email(error_msg)
         return text
 
 # Function to convert UTC time to Tehran time and return as datetime object
@@ -377,7 +433,6 @@ def parse_to_tehran_time(utc_time_str):
     Convert UTC time string to Tehran time (UTC+3:30) and return as datetime object
     """
     try:
-        # Handle different time formats from APIs
         if 'T' in utc_time_str:
             utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
         else:
@@ -385,7 +440,9 @@ def parse_to_tehran_time(utc_time_str):
         tehran_time = utc_time + timedelta(hours=3, minutes=30)
         return tehran_time
     except Exception as e:
-        logger.warning(f"Error converting time: {str(e)} - Input: {utc_time_str}")
+        error_msg = f"Error converting time: {str(e)} - Input: {utc_time_str}"
+        logger.warning(error_msg)
+        send_error_email(error_msg)
         return None
 
 # Function to format Tehran time for display
@@ -399,19 +456,15 @@ def format_tehran_time(tehran_time):
 def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None):
     """
     Filter articles based on the selected time range or date range
-    - If time_range_hours is infinite (All articles), filter by start_date and end_date
-    - Otherwise, filter by time_range_hours relative to current time
     """
     if not articles:
         return []
     
     filtered_articles = []
     
-    # Current time in Tehran (UTC+3:30)
     current_utc_time = datetime.utcnow()
     current_tehran_time = current_utc_time + timedelta(hours=3, minutes=30)
     
-    # If "All articles" is selected, filter by start_date and end_date
     if time_range_hours == float("inf"):
         start_datetime = datetime.combine(start_date, datetime.min.time()) + timedelta(hours=3, minutes=30)
         end_datetime = datetime.combine(end_date, datetime.max.time()) + timedelta(hours=3, minutes=30)
@@ -421,7 +474,6 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
             if published_time and start_datetime <= published_time <= end_datetime:
                 filtered_articles.append(article)
     else:
-        # Filter by time range relative to current time
         cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
         for article in articles:
             published_time = parse_to_tehran_time(article["published_at"])
@@ -437,12 +489,12 @@ def pre_process_articles(articles, avalai_api_url):
     """
     for i, article in enumerate(articles):
         try:
-            # Translate title and description using Avalai
             article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
             article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
+            send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
     return articles
 
 # Function to display news articles in a nice format
@@ -542,7 +594,6 @@ def save_articles_to_file_for_download(articles, format="csv"):
 # Function to send a message to Telegram
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
-        # Ensure message length is within Telegram's limit (4096 characters)
         if len(message) > 4096:
             message = message[:4093] + "..."
         
@@ -568,14 +619,11 @@ def get_chat_id_from_username(username, chat_ids):
         if not username.startswith("@"):
             return None, "Username must start with @ (e.g., @username)"
         
-        # Remove the @ symbol
         username = username[1:].lower()
         
-        # Check if username is already in stored chat IDs
         if username in chat_ids:
             return chat_ids[username], None
         
-        # Use getUpdates to check for recent chats
         url = f"{TELEGRAM_API_URL}/getUpdates"
         response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -584,7 +632,6 @@ def get_chat_id_from_username(username, chat_ids):
         if not data.get("ok"):
             return None, "Failed to fetch updates from Telegram"
         
-        # Look for the username in recent updates
         for update in data.get("result", []):
             if "message" in update and "chat" in update["message"]:
                 chat = update["message"]["chat"]
@@ -593,7 +640,6 @@ def get_chat_id_from_username(username, chat_ids):
                     chat_ids[username] = chat_id
                     save_chat_ids(chat_ids)
                     return chat_id, None
-                # Check if it's a group with the username
                 if chat.get("type") == "group" or chat.get("type") == "supergroup":
                     if chat.get("title", "").lower().find(username.lower()) != -1:
                         chat_id = chat["id"]
@@ -604,51 +650,47 @@ def get_chat_id_from_username(username, chat_ids):
         return None, f"Chat ID not found for username @{username}. Make sure the user/group has interacted with the bot."
     except Exception as e:
         logger.warning(f"Error fetching Chat ID for username {username}: {str(e)}")
+        send_error_email(f"Error fetching Chat ID for username {username}: {str(e)}")
         return None, str(e)
 
 # Main Streamlit app
 def main():
     st.title("Iran News Aggregator")
     
-    # Initialize session state for selected articles and articles
     if 'selected_articles' not in st.session_state:
         st.session_state.selected_articles = []
     if 'articles' not in st.session_state:
-        st.session_state.articles = load_articles_from_file()  # Load from file if exists
+        st.session_state.articles = load_articles_from_file()
     if 'chat_ids' not in st.session_state:
-        st.session_state.chat_ids = load_chat_ids()  # Load chat IDs from file
+        st.session_state.chat_ids = load_chat_ids()
     if 'avalai_api_url' not in st.session_state:
-        st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT  # Default Avalai API URL
+        st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
     
-    # Debug: Log the state to see if articles are being cleared
     if not st.session_state.articles:
         st.info("No articles in session state. Please search for news or check if data was loaded from file.")
     else:
         st.info(f"Found {len(st.session_state.articles)} articles in session state.")
     
-    # Sidebar for queries and filters
     with st.sidebar:
         st.header("Query Settings")
         query = st.text_input("Search Query", value="Iran", key="search_query").strip()
-        today = datetime(2025, 5, 14)  # Today's date (May 14, 2025)
-        default_start_date = today - timedelta(days=7)  # Default to 7 days ago
+        today = datetime(2025, 5, 14)
+        default_start_date = today - timedelta(days=7)
         start_date = st.date_input("Start Date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today, key="start_date")
         end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=today, key="end_date")
         max_articles = st.slider(label="Maximum number of articles per API", min_value=5, max_value=100, value=20, key="max_articles")
         
-        # Add time range filter
         time_range_options = {
-            "Last 30 minutes": 0.5,  # 30 minutes
-            "Last 1 hour": 1,        # 1 hour
-            "Last 4 hours": 4,       # 4 hours
-            "Last 12 hours": 12,     # 12 hours
-            "Last 24 hours": 24,     # 24 hours
-            "All articles": float("inf")  # Use start_date and end_date
+            "Last 30 minutes": 0.5,
+            "Last 1 hour": 1,
+            "Last 4 hours": 4,
+            "Last 12 hours": 12,
+            "Last 24 hours": 24,
+            "All articles": float("inf")
         }
         selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
         time_range_hours = time_range_options[selected_time_range]
         
-        # Avalai API URL selection
         st.header("Translation Settings")
         avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
         st.session_state.avalai_api_url = st.selectbox(
@@ -658,69 +700,56 @@ def main():
             help="Choose the Avalai API URL. Use https://api.avalai.ir/v1 for global access, or https://api.avalapis.ir/v1 for better performance inside Iran (only accessible from Iran)."
         )
         
-        # Add search button
         search_button = st.button("Search for News")
-        
-        # Add clear button to reset articles
         clear_button = st.button("Clear Results")
         
-        # Telegram settings
         st.header("Telegram Settings")
         telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607", key="telegram_chat_id")
         telegram_user_or_group_id = st.text_input("Send to User/Group", value="", key="telegram_user_or_group_id", help="Enter the @username or @groupname to send selected news to (leave blank to use default Chat ID)")
         
-        # Add a link to start a chat with the bot
-        bot_username = "YourBotUsername"  # Replace with your bot's username, e.g., @YourBot
+        bot_username = "YourBotUsername"
         st.markdown(f"[Start a chat with the bot](https://t.me/{bot_username}) to allow sending messages.", unsafe_allow_html=True)
         
-        # Display stored usernames
         if st.session_state.chat_ids:
             st.subheader("Known Users/Groups")
             for username, chat_id in st.session_state.chat_ids.items():
                 st.write(f"@{username}: {chat_id}")
         
-        # Download options
         st.header("Download Options")
         download_format = st.selectbox("Download Format", ["CSV", "JSON"], key="download_format")
     
-    # Clear articles if clear button is pressed
     if clear_button:
         st.session_state.articles = []
         st.session_state.selected_articles = []
         if os.path.exists(TEMP_FILE):
             os.remove(TEMP_FILE)
-        st.experimental_rerun()  # Force a rerun to refresh the page
-    
-    # Execute search when button is clicked
+        st.experimental_rerun()
+
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
-            # Convert dates to string format for APIs
             from_date = start_date.strftime("%Y-%m-%d")
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
-                # Filter articles by time range or date range
                 filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date)
                 if not filtered_articles:
                     st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range or adjust the date.")
                 else:
                     articles = filtered_articles
-                articles = pre_process_articles(articles, st.session_state.avalai_api_url)  # Pre-process with selected Avalai API URL
+                articles = pre_process_articles(articles, st.session_state.avalai_api_url)
                 st.session_state.articles = articles
-                save_articles_to_file(articles)  # Save to temp file
+                save_articles_to_file(articles)
                 st.session_state.selected_articles = []
                 st.success("Articles fetched successfully!")
             else:
                 st.warning("No articles fetched. Check the error messages above or try a different query.")
     
-    # Always display articles if they exist in session state
     if st.session_state.articles:
         st.write(f"Found {len(st.session_state.articles)} articles in session state. Displaying now...")
         display_news_articles(st.session_state.articles)
     else:
         st.info("No articles to display in session state.")
     
-    # Download section in the sidebar
     if st.session_state.articles:
         with st.sidebar:
             if download_format == "CSV":
@@ -731,7 +760,7 @@ def main():
                     file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv"
                 )
-            else:  # JSON
+            else:
                 json_data = save_articles_to_file_for_download(st.session_state.articles, format="json")
                 st.download_button(
                     label="Download as JSON",
@@ -740,30 +769,25 @@ def main():
                     mime="application/json"
                 )
             
-            # Send selected news to Telegram
             if st.session_state.selected_articles:
                 if st.button("Send Selected News to Telegram"):
                     with st.spinner("Sending to Telegram..."):
                         success_count = 0
                         fail_count = 0
-                        # Determine the target chat ID
                         target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
                         
-                        # If the input starts with @, try to resolve username to Chat ID
                         if target_chat_id.startswith("@"):
                             chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
                             if chat_id is None:
                                 st.error(f"Failed to resolve username: {error}")
-                                fail_count = len(st.session_state.selected_articles)  # Mark all as failed
+                                fail_count = len(st.session_state.selected_articles)
                             else:
                                 target_chat_id = chat_id
                         
-                        # Debug: Show the target chat ID and message
                         st.info(f"Sending to Chat ID: {target_chat_id}")
                         
                         for article in st.session_state.selected_articles:
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
-                            # Debug: Show the message being sent
                             st.info(f"Message: {message}")
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
                             if success:
