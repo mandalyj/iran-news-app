@@ -524,6 +524,7 @@ def display_news_articles(articles):
     st.subheader("Selected Articles")
     selected_count = len(st.session_state.selected_articles)
     st.write(f"You have selected {selected_count} article(s) to send to Telegram")
+    logger.info(f"Current selected articles: {st.session_state.selected_articles}")
     
     st.subheader("News Articles")
     # Create two columns for displaying articles
@@ -542,9 +543,11 @@ def display_news_articles(articles):
             if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
                 if not is_selected:
                     st.session_state.selected_articles.append(article)
+                    logger.info(f"Added article to selected: {article['title']}")
             else:
                 if is_selected:
                     st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
+                    logger.info(f"Removed article from selected: {article['title']}")
             
             tehran_time = parse_to_tehran_time(article["published_at"])
             tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
@@ -760,6 +763,74 @@ def main():
     else:
         st.info("No articles to display in session state.")
         logger.info("No articles to display in session state after search.")
+
+    with st.sidebar:
+        st.header("Telegram Actions")
+        if st.button("Reset Selection"):
+            st.session_state.selected_articles = []
+            st.success("Selection reset successfully!")
+            logger.info("Selection reset by user.")
+        
+        if st.button("Send Selected News to Telegram", disabled=len(st.session_state.selected_articles) == 0):
+            with st.spinner("Sending to Telegram..."):
+                success_count = 0
+                fail_count = 0
+                target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
+                
+                if target_chat_id.startswith("@"):
+                    chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
+                    if chat_id is None:
+                        st.error(f"Failed to resolve username: {error}")
+                        fail_count = len(st.session_state.selected_articles)
+                    else:
+                        target_chat_id = chat_id
+                
+                st.info(f"Sending to Chat ID: {target_chat_id}")
+                logger.info(f"Sending {len(st.session_state.selected_articles)} articles to {target_chat_id}")
+                
+                for article in st.session_state.selected_articles:
+                    message = (
+                        f"*{article['title']}*\n\n"
+                        f"{article['description']}\n\n"
+                        f"*عنوان (فارسی):* {article['translated_title']}\n\n"
+                        f"*توضیحات (فارسی):* {article['translated_description']}\n\n"
+                        f"[Read more]({article['url']})"
+                    )
+                    st.info(f"Message: {message}")
+                    success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
+                    if success:
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                        st.error(f"Failed to send to {target_chat_id}: {article['title']} - {result}")
+                    time.sleep(1)
+                if success_count > 0:
+                    st.success(f"Successfully sent {success_count} article(s) to Telegram")
+                if fail_count > 0:
+                    st.warning(f"Failed to send {fail_count} article(s) to Telegram")
+        else:
+            st.info(f"Select {len(st.session_state.selected_articles)} article(s) to send to Telegram")
+            logger.info(f"No articles selected for sending. Current count: {len(st.session_state.selected_articles)}")
+
+    if st.session_state.articles:
+        with st.sidebar:
+            st.header("Download Options")
+            if download_format == "CSV":
+                csv_data = save_articles_to_file_for_download(st.session_state.articles, format="csv")
+                st.download_button(
+                    label="Download as CSV",
+                    data=csv_data if csv_data else b"",
+                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                json_data = save_articles_to_file_for_download(st.session_state.articles, format="json")
+                st.download_button(
+                    label="Download as JSON",
+                    data=json_data if json_data else b"",
+                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json",
+                    mime="application/json"
+                )
 
 if __name__ == "__main__":
     main()
