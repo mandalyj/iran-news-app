@@ -260,6 +260,7 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     Fetch news from all APIs in parallel and combine results
     """
     st.write("Starting news fetch process (parallel)...")
+    logger.info(f"Fetching news for query: {query}, max_records: {max_records}, from_date: {from_date}, to_date: {to_date}")
     fetch_functions = [
         (fetch_gnews, "GNews"),
         (fetch_worldnews, "World News API")
@@ -345,7 +346,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
     }
     
     try:
-        logger.info(f"Sending translation request to Avalai: {*payload}")
+        logger.info(f"Sending translation request to Avalai: {payload}")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -487,7 +488,9 @@ def pre_process_articles(articles, avalai_api_url, enable_translation=False, num
                     logger.info(f"Skipping translation for article {i+1}: {article['title']} (beyond limit of {num_articles_to_translate})")
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
-            logger.error(f"Error in pre_process_articles: {str(e)}")
+            logger.error(f"Error in!!!
+
+ pre_process_articles: {str(e)}")
             send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
     return sorted_articles
 
@@ -652,8 +655,10 @@ def main():
     
     if not st.session_state.articles:
         st.info("No articles in session state. Please search for news or check if data was loaded from file.")
+        logger.info("No articles in session state at start.")
     else:
         st.info(f"Found {len(st.session_state.articles)} articles in session state.")
+        logger.info(f"Found {len(st.session_state.articles)} articles in session state at start.")
     
     with st.sidebar:
         st.header("Query Settings")
@@ -726,6 +731,7 @@ def main():
 
     if search_button:
         with st.spinner(f"Searching for news about {query}..."):
+            logger.info(f"Search button clicked. Query: {query}, Start Date: {start_date}, End Date: {end_date}, Max Articles: {max_articles}")
             from_date = start_date.strftime("%Y-%m-%d")
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
@@ -748,72 +754,14 @@ def main():
                 st.success("Articles fetched successfully!")
             else:
                 st.warning("No articles fetched. Check the error messages above or try a different query.")
+                logger.warning("No articles fetched after fetch_news call.")
     
     if st.session_state.articles:
         st.write(f"Found {len(st.session_state.articles)} articles in session state. Displaying now...")
         display_news_articles(st.session_state.articles)
     else:
         st.info("No articles to display in session state.")
-    
-    if st.session_state.articles:
-        with st.sidebar:
-            if download_format == "CSV":
-                csv_data = save_articles_to_file_for_download(st.session_state.articles, format="csv")
-                st.download_button(
-                    label="Download as CSV",
-                    data=csv_data if csv_data else b"",
-                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv",
-                    mime="text/csv"
-                )
-            else:
-                json_data = save_articles_to_file_for_download(st.session_state.articles, format="json")
-                st.download_button(
-                    label="Download as JSON",
-                    data=json_data if json_data else b"",
-                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json",
-                    mime="application/json"
-                )
-            
-            if st.session_state.selected_articles:
-                if st.button("Send Selected News to Telegram"):
-                    with st.spinner("Sending to Telegram..."):
-                        success_count = 0
-                        fail_count = 0
-                        target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
-                        
-                        if target_chat_id.startswith("@"):
-                            chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
-                            if chat_id is None:
-                                st.error(f"Failed to resolve username: {error}")
-                                fail_count = len(st.session_state.selected_articles)
-                            else:
-                                target_chat_id = chat_id
-                        
-                        st.info(f"Sending to Chat ID: {target_chat_id}")
-                        
-                        for article in st.session_state.selected_articles:
-                            # Include both original and translated text in the message
-                            message = (
-                                f"*{article['title']}*\n\n"
-                                f"{article['description']}\n\n"
-                                f"*عنوان (فارسی):* {article['translated_title']}\n\n"
-                                f"*توضیحات (فارسی):* {article['translated_description']}\n\n"
-                                f"[Read more]({article['url']})"
-                            )
-                            st.info(f"Message: {message}")
-                            success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
-                            if success:
-                                success_count += 1
-                            else:
-                                fail_count += 1
-                                st.error(f"Failed to send to {target_chat_id}: {article['title']} - {result}")
-                            time.sleep(1)
-                        if success_count > 0:
-                            st.success(f"Successfully sent {success_count} article(s) to Telegram")
-                        if fail_count > 0:
-                            st.warning(f"Failed to send {fail_count} article(s) to Telegram")
-            else:
-                st.info("Select articles to send to Telegram")
+        logger.info("No articles to display in session state after search.")
 
 if __name__ == "__main__":
     main()
