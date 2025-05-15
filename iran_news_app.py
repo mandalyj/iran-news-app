@@ -886,9 +886,7 @@ def display_items(items):
                 with col1:
                     st.bar_chart(sources.set_index("Source"))
                 with col2:
-                    st.data
-
-frame(sources)
+                    st.dataframe(sources)
             else:
                 st.write(f"All articles from: {sources.iloc[0, 0]}")
             
