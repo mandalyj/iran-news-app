@@ -579,7 +579,7 @@ def save_articles_to_file_for_download(articles, format="csv"):
         return json.dumps(articles, indent=2)
     return None
 
-# Function to send a message to Telegram (include both original and translated text)
+# Function to send a message to Telegram (include only title, time, and truncated description)
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
@@ -789,14 +789,16 @@ def main():
                 logger.info(f"Sending {len(st.session_state.selected_articles)} articles to {target_chat_id}")
                 
                 for article in st.session_state.selected_articles:
+                    tehran_time = parse_to_tehran_time(article["published_at"])
+                    tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
+                    truncated_description = truncate_text(article["translated_description"] or article["description"], max_length=100)
                     message = (
-                        f"*{article['title']}*\n\n"
-                        f"{article['description']}\n\n"
-                        f"*عنوان (فارسی):* {article['translated_title']}\n\n"
-                        f"*توضیحات (فارسی):* {article['translated_description']}\n\n"
-                        f"[Read more]({article['url']})"
+                        f"*{article['translated_title'] or article['title']}*\n\n"
+                        f"**زمان انتشار:** {tehran_time_str}\n\n"
+                        f"{truncated_description}\n\n"
+                        f"[ادامه مطلب]({article['url']})"
                     )
-                    st.info(f"Message: {message}")
+                    logger.info(f"Sending message (length: {len(message)}): {message}")
                     success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
                     if success:
                         success_count += 1
