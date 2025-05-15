@@ -421,7 +421,6 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         return []
     
     try:
-        # For Financial Report, query is the company symbol
         fetch_query = query if selected_api != "Financial Report (FMP)" else query.upper()
         items, error = fetch_function(fetch_query, max_records, from_date, to_date)
         st.write(f"Fetched {len(items)} items from {selected_api}")
@@ -436,7 +435,6 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         st.error(error_msg)
         send_error_email(error_msg)
     
-    # Remove duplicates for news based on URL
     if selected_api != "Financial Report (FMP)":
         seen_urls = set()
         unique_items = []
@@ -582,7 +580,6 @@ def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=N
     if not items:
         return []
     
-    # Skip filtering for reports
     if items and items[0].get("type") == "report":
         return items
     
@@ -625,7 +622,6 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
     if not items:
         return items
     
-    # Skip translation for reports
     if items and items[0].get("type") == "report":
         return items
     
@@ -672,7 +668,6 @@ def display_items(items):
         st.warning("No items to display. This might be due to filtering or no items being fetched.")
         return
     
-    # Check if items are news or reports
     item_type = items[0].get("type", "news")
     
     if item_type == "news":
@@ -737,7 +732,6 @@ def display_items(items):
                 st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
     else:
-        # Display financial reports
         st.subheader("Financial Reports")
         for i, report in enumerate(items):
             st.markdown(f'<div class="report-section">', unsafe_allow_html=True)
@@ -835,6 +829,10 @@ def main():
         st.session_state.chat_ids = load_chat_ids()
     if 'avalai_api_url' not in st.session_state:
         st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
+    
+    # Ensure items is always a list
+    if not isinstance(st.session_state.items, list):
+        st.session_state.items = []
     
     if not st.session_state.items:
         st.info("No items in session state. Please search for news/reports or check if data was loaded from file.")
@@ -1004,7 +1002,6 @@ def main():
                             f"[ادامه مطلب]({item['url']})"
                         )
                     else:
-                        # Financial report message
                         message = (
                             f"**گزارش مالی شرکت {item['symbol']}**\n\n"
                             f"**تاریخ گزارش:** {item['date']}\n"
