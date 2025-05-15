@@ -8,22 +8,23 @@ import base64
 from io import BytesIO
 import json
 import os
-import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - GNews API, NewsAPI, and World News API
+# Configuration - API keys are fetched from environment variables only
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
-GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "99cbce3921a97e9454302dc0e15789fa")  # Your GNews API Key
+GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")  # Fetch from Render environment
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Replace with your NewsAPI Key
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Fetch from Render environment
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
-WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "f1c5582e0ad149e0b8af84eb7659dc38")  # Your World News API Key
+WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")  # Fetch from Render environment
+AVALAI_API_URL = "https://api.avalai.ir/v1"
+AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")  # Fetch from Render environment
 
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "7912415975:AAElta6RTGMYcaMY2cEMyU0Zbfdf_Cm4ZfQ")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")  # Fetch from Render environment
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 # Temporary file to store articles and chat IDs
@@ -108,7 +109,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     Fetch news articles from GNews API
     """
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
-        error_msg = "Invalid GNews API key. Please set a valid API key."
+        error_msg = "Invalid GNews API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         return [], error_msg
     
@@ -149,8 +150,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "description": a.get("description", "") or "No description available",
                 "image_url": a.get("image", ""),
                 "translated_title": "",
-                "translated_description": "",
-                "stock_price": None
+                "translated_description": ""
             }
             for a in articles
         ], None
@@ -165,7 +165,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
     Fetch news articles from NewsAPI
     """
     if not NEWSAPI_KEY or NEWSAPI_KEY == "YOUR_NEWSAPI_KEY":
-        error_msg = "Invalid NewsAPI key. Please set a valid API key."
+        error_msg = "Invalid NewsAPI key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         return [], error_msg
     
@@ -209,8 +209,7 @@ def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
                 "description": a.get("description", "") or "No description available",
                 "image_url": a.get("urlToImage", ""),
                 "translated_title": "",
-                "translated_description": "",
-                "stock_price": None
+                "translated_description": ""
             }
             for a in articles
         ], None
@@ -225,7 +224,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     Fetch news articles from World News API
     """
     if not WORLDNEWS_API_KEY or WORLDNEWS_API_KEY == "YOUR_WORLDNEWS_API_KEY":
-        error_msg = "Invalid World News API key. Please set a valid API key."
+        error_msg = "Invalid World News API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         return [], error_msg
     
@@ -270,8 +269,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "description": a.get("text", "") or "No description available",
                 "image_url": a.get("image", ""),
                 "translated_title": "",
-                "translated_description": "",
-                "stock_price": None
+                "translated_description": ""
             }
             for a in articles
         ], None
@@ -333,6 +331,43 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     
     return unique_articles
 
+# Function to translate text using Avalai API
+def translate_with_avalai(text, source_lang="en", target_lang="fa"):
+    """
+    Translate text using Avalai API from source language to target language
+    """
+    if not text:
+        return text
+    
+    if not AVALAI_API_KEY or AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
+        logger.error("Invalid Avalai API key. Please set a valid API key in Render environment variables.")
+        return text
+    
+    endpoint = f"{AVALAI_API_URL}/translate"
+    headers = {
+        "Authorization": f"Bearer {AVALAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "text": text,
+        "source_lang": source_lang,
+        "target_lang": target_lang
+    }
+    
+    try:
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "translated_text" in data:
+            return data["translated_text"]
+        else:
+            logger.warning(f"Avalai API response missing translated_text: {data}")
+            return text
+    except Exception as e:
+        logger.error(f"Error translating with Avalai: {str(e)}")
+        return text
+
 # Function to convert UTC time to Tehran time and return as datetime object
 def parse_to_tehran_time(utc_time_str):
     """
@@ -388,60 +423,16 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
     
     return filtered_articles
 
-# Function to fetch stock price using yfinance
-def fetch_stock_price(company_name):
-    """
-    Fetch the latest stock price for a company using yfinance
-    """
-    try:
-        # Simple mapping of company names to ticker symbols (you can expand this)
-        ticker_map = {
-            "apple": "AAPL",
-            "microsoft": "MSFT",
-            "google": "GOOGL",
-            "amazon": "AMZN",
-            "tesla": "TSLA"
-        }
-        
-        # Try to find a matching ticker
-        ticker_symbol = None
-        company_name_lower = company_name.lower()
-        for key, value in ticker_map.items():
-            if key in company_name_lower:
-                ticker_symbol = value
-                break
-        
-        if not ticker_symbol:
-            return None, "Ticker not found for this company"
-        
-        ticker = yf.Ticker(ticker_symbol)
-        stock_data = ticker.history(period="1d")
-        if not stock_data.empty:
-            latest_price = stock_data["Close"].iloc[-1]
-            return round(latest_price, 2), None
-        return None, "No stock data available"
-    except Exception as e:
-        logger.warning(f"Error fetching stock price for {company_name}: {str(e)}")
-        return None, str(e)
-
-# Function to pre-process articles (stock prices only)
+# Function to pre-process articles (translations only)
 def pre_process_articles(articles):
     """
-    Pre-process articles by fetching stock prices
+    Pre-process articles by translating with Avalai
     """
     for i, article in enumerate(articles):
         try:
-            # Fetch stock price based on article title
-            stock_price, error = fetch_stock_price(article["title"])
-            if stock_price is not None:
-                article["stock_price"] = stock_price
-            else:
-                article["stock_price"] = None
-                if error:
-                    logger.warning(f"Stock price fetch error for {article['title']}: {error}")
-            # Set empty translations (disabled for now)
-            article["translated_title"] = article["title"]
-            article["translated_description"] = article["description"]
+            # Translate title and description using Avalai
+            article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa")
+            article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa")
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
@@ -492,8 +483,6 @@ def display_news_articles(articles):
             st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
             st.markdown(f'**Source:** {article["source"]}')
             st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-            if article["stock_price"] is not None:
-                st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
             if article["image_url"]:
                 try:
                     st.image(article["image_url"], use_column_width=True)
@@ -521,8 +510,6 @@ def display_news_articles(articles):
                 st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
                 st.markdown(f'**Source:** {article["source"]}')
                 st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-                if article["stock_price"] is not None:
-                    st.markdown(f'<div class="english-text">**Latest Stock Price (USD):** {article["stock_price"]}</div>', unsafe_allow_html=True)
                 if article["image_url"]:
                     try:
                         st.image(article["image_url"], use_column_width=True)
@@ -699,7 +686,7 @@ def main():
                     st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range or adjust the date.")
                 else:
                     articles = filtered_articles
-                articles = pre_process_articles(articles)  # Pre-process (stock prices only)
+                articles = pre_process_articles(articles)  # Pre-process (translations only)
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
@@ -757,9 +744,6 @@ def main():
                         
                         for article in st.session_state.selected_articles:
                             message = f"*{article['title']}*\n\n{article['description']}\n\n[Read more]({article['url']})"
-                            stock_price = article.get("stock_price")
-                            if stock_price is not None:
-                                message += f"\n\n**Latest Stock Price (USD):** {stock_price}"
                             # Debug: Show the message being sent
                             st.info(f"Message: {message}")
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
