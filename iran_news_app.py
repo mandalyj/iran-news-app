@@ -315,7 +315,7 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
     headers = {
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
-    params = {
+    params devenus = {
         "limit": min(max_records, 100),
     }
     logger.info(f"Sending CoinGecko news request with params: {params}")
@@ -891,6 +891,10 @@ def display_items(items):
                 st.write(f"All articles from: {sources.iloc[0, 0]}")
             
             st.subheader("Selected Articles")
+            # Ensure selected_items is a list before calling len()
+            if not isinstance(st.session_state.selected_items, list):
+                logger.error(f"st.session_state.selected_items is not a list: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                st.session_state.selected_items = []
             selected_count = len(st.session_state.selected_items)
             st.write(f"You have selected {selected_count} article(s) to send to Telegram")
             logger.info(f"Current selected items: {st.session_state.selected_items}")
@@ -1056,8 +1060,9 @@ def main():
         st.title("Iran News Aggregator")
         
         # Initialize session state variables
-        if 'selected_items' not in st.session_state:
+        if 'selected_items' not in st.session_state or not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
+            logger.info("Initialized st.session_state.selected_items as an empty list")
         if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
             st.session_state.items = load_articles_from_file()
         if 'chat_ids' not in st.session_state:
@@ -1070,7 +1075,14 @@ def main():
             logger.warning("st.session_state.items is not a list, resetting to empty list")
             st.session_state.items = []
         
+        # Ensure selected_items is always a list
+        if not isinstance(st.session_state.selected_items, list):
+            logger.error(f"st.session_state.selected_items is not a list: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+            st.session_state.selected_items = []
+        
         logger.info(f"Session state items at start: {st.session_state.items}, Type: {type(st.session_state.items)}")
+        logger.info(f"Session state selected_items at start: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+        
         if not st.session_state.items:
             st.info("No items in session state. Please search for news/reports or check if data was loaded from file.")
             logger.info("No items in session state at start.")
@@ -1202,6 +1214,11 @@ def main():
                 st.success("Selection reset successfully!")
                 logger.info("Selection reset by user.")
             
+            # Ensure selected_items is a list before using len()
+            if not isinstance(st.session_state.selected_items, list):
+                logger.error(f"st.session_state.selected_items is not a list before Telegram button: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                st.session_state.selected_items = []
+            
             if st.button("Send Selected Items to Telegram", disabled=len(st.session_state.selected_items) == 0):
                 with st.spinner("Sending to Telegram..."):
                     success_count = 0
@@ -1279,6 +1296,9 @@ def main():
                     if fail_count > 0:
                         st.warning(f"Failed to send {fail_count} item(s) to Telegram")
             else:
+                if not isinstance(st.session_state.selected_items, list):
+                    logger.error(f"st.session_state.selected_items is not a list in info message: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                    st.session_state.selected_items = []
                 st.info(f"Select {len(st.session_state.selected_items)} item(s) to send to Telegram")
                 logger.info(f"No items selected for sending. Current count: {len(st.session_state.selected_items)}")
 
