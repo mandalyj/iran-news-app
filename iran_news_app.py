@@ -396,7 +396,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     payload = {
-        "model": "gpt-4o",  # Assuming Avalai supports this model
+        "model": "gpt-4o",
         "messages": [
             {
                 "role": "user",
@@ -412,7 +412,6 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         data = response.json()
         logger.info(f"Avalai API response: {data}")
         
-        # Extract translated text from chat/completions response
         if "choices" in data and len(data["choices"]) > 0:
             translated_text = data["choices"][0]["message"]["content"]
             return translated_text
@@ -453,12 +452,17 @@ def format_tehran_time(tehran_time):
     return tehran_time.strftime("%Y/%m/%d - %H:%M")
 
 # Function to filter articles by time range
-def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None):
+def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None, disable_filter=False):
     """
     Filter articles based on the selected time range or date range
+    - If disable_filter is True, return all articles without filtering
     """
     if not articles:
         return []
+    
+    if disable_filter:
+        logger.info("Time filter disabled. Returning all articles.")
+        return articles
     
     filtered_articles = []
     
@@ -471,26 +475,36 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
         
         for article in articles:
             published_time = parse_to_tehran_time(article["published_at"])
-            if published_time and start_datetime <= published_time <= end_datetime:
-                filtered_articles.append(article)
+            if published_time:
+                logger.info(f"Article time: {published_time}, Start: {start_datetime}, End: {end_datetime}")
+                if start_datetime <= published_time <= end_datetime:
+                    filtered_articles.append(article)
     else:
         cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
         for article in articles:
             published_time = parse_to_tehran_time(article["published_at"])
-            if published_time and published_time >= cutoff_time:
-                filtered_articles.append(article)
+            if published_time:
+                logger.info(f"Article time: {published_time}, Cutoff: {cutoff_time}")
+                if published_time >= cutoff_time:
+                    filtered_articles.append(article)
     
+    logger.info(f"After filtering: {len(filtered_articles)} articles remain out of {len(articles)}")
     return filtered_articles
 
 # Function to pre-process articles (translations only)
-def pre_process_articles(articles, avalai_api_url):
+def pre_process_articles(articles, avalai_api_url, enable_translation=False):
     """
     Pre-process articles by translating with Avalai
+    - If enable_translation is False, skip translation
     """
     for i, article in enumerate(articles):
         try:
-            article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-            article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+            if enable_translation:
+                article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+            else:
+                article["translated_title"] = article["title"]  # Use original title
+                article["translated_description"] = article["description"]  # Use original description
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
@@ -501,6 +515,7 @@ def pre_process_articles(articles, avalai_api_url):
 def display_news_articles(articles):
     """Display news articles in a structured format"""
     st.write(f"Attempting to display {len(articles)} articles...")
+    logger.info(f"Displaying {len(articles)} articles: {articles}")
     if not articles:
         st.warning("No news articles to display")
         return
@@ -691,6 +706,9 @@ def main():
         selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
         time_range_hours = time_range_options[selected_time_range]
         
+        # Add option to disable time filter
+        disable_time_filter = st.checkbox("Disable Time Filter (Show All Articles)", value=False, key="disable_time_filter")
+        
         st.header("Translation Settings")
         avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
         st.session_state.avalai_api_url = st.selectbox(
@@ -699,6 +717,9 @@ def main():
             index=avalai_api_url_options.index(st.session_state.avalai_api_url),
             help="Choose the Avalai API URL. Use https://api.avalai.ir/v1 for global access, or https://api.avalapis.ir/v1 for better performance inside Iran (only accessible from Iran)."
         )
+        
+        # Add option to enable/disable translation
+        enable_translation = st.checkbox("Enable Translation (May cause 403 error)", value=False, key="enable_translation")
         
         search_button = st.button("Search for News")
         clear_button = st.button("Clear Results")
@@ -731,12 +752,12 @@ def main():
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
-                filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date)
+                filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
                 if not filtered_articles:
-                    st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range or adjust the date.")
+                    st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range, adjust the date, or disable the time filter.")
                 else:
                     articles = filtered_articles
-                articles = pre_process_articles(articles, st.session_state.avalai_api_url)
+                articles = pre_process_articles(articles, st.session_state.avalai_api_url, enable_translation=enable_translation)
                 st.session_state.articles = articles
                 save_articles_to_file(articles)
                 st.session_state.selected_articles = []
