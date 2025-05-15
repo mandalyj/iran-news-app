@@ -258,10 +258,10 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         send_error_email(error_msg)
         return [], error_msg
 
-# Fetch crypto news from CoinGecko API
+# Fetch crypto news from CoinGecko API with delay
 def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
     """
-    Fetch cryptocurrency news articles from CoinGecko API
+    Fetch cryptocurrency news articles from CoinGecko API with a delay to avoid rate limiting
     """
     endpoint = f"{COINGECKO_API_URL}/news"
     headers = {
@@ -273,6 +273,10 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
     logger.info(f"Sending CoinGecko news request with params: {params}")
     
     try:
+        # Adding a 2-second delay to avoid hitting rate limits
+        logger.info("Adding a 2-second delay before CoinGecko request to avoid rate limiting...")
+        time.sleep(2)
+        
         response = requests.get(endpoint, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
