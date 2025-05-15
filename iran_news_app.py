@@ -21,7 +21,7 @@ NEWSAPI_URL = "https://newsapi.org/v2/everything"
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")  # Fetch from Render environment
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")  # Fetch from Render environment
-AVALAI_API_URL = "https://api.avalai.ir/v1"
+AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"  # Default to this, can be changed in UI
 AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")  # Fetch from Render environment
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")  # Fetch from Render environment
@@ -239,7 +239,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "end-date": to_date
     }
     headers = {
-        "User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
+        "User-Agent": "IranNewsAggregator/1.0 (Contact: your-email@example.com)"
     }
     logger.info(f"Sending World News API request with params: {params}")
     
@@ -332,18 +332,19 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     return unique_articles
 
 # Function to translate text using Avalai API
-def translate_with_avalai(text, source_lang="en", target_lang="fa"):
+def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT):
     """
     Translate text using Avalai API from source language to target language
     """
     if not text:
+        logger.warning("Empty text provided for translation")
         return text
     
     if not AVALAI_API_KEY or AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
         logger.error("Invalid Avalai API key. Please set a valid API key in Render environment variables.")
         return text
     
-    endpoint = f"{AVALAI_API_URL}/translate"
+    endpoint = f"{avalai_api_url}/translate"
     headers = {
         "Authorization": f"Bearer {AVALAI_API_KEY}",
         "Content-Type": "application/json"
@@ -355,9 +356,11 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa"):
     }
     
     try:
+        logger.info(f"Sending translation request to Avalai: {payload}")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
+        logger.info(f"Avalai API response: {data}")
         
         if "translated_text" in data:
             return data["translated_text"]
@@ -374,11 +377,15 @@ def parse_to_tehran_time(utc_time_str):
     Convert UTC time string to Tehran time (UTC+3:30) and return as datetime object
     """
     try:
-        utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
+        # Handle different time formats from APIs
+        if 'T' in utc_time_str:
+            utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
+        else:
+            utc_time = datetime.strptime(utc_time_str, "%Y-%m-%d %H:%M:%S")
         tehran_time = utc_time + timedelta(hours=3, minutes=30)
         return tehran_time
     except Exception as e:
-        logger.warning(f"Error converting time: {str(e)}")
+        logger.warning(f"Error converting time: {str(e)} - Input: {utc_time_str}")
         return None
 
 # Function to format Tehran time for display
@@ -424,15 +431,15 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
     return filtered_articles
 
 # Function to pre-process articles (translations only)
-def pre_process_articles(articles):
+def pre_process_articles(articles, avalai_api_url):
     """
     Pre-process articles by translating with Avalai
     """
     for i, article in enumerate(articles):
         try:
             # Translate title and description using Avalai
-            article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa")
-            article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa")
+            article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+            article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
@@ -610,6 +617,8 @@ def main():
         st.session_state.articles = load_articles_from_file()  # Load from file if exists
     if 'chat_ids' not in st.session_state:
         st.session_state.chat_ids = load_chat_ids()  # Load chat IDs from file
+    if 'avalai_api_url' not in st.session_state:
+        st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT  # Default Avalai API URL
     
     # Debug: Log the state to see if articles are being cleared
     if not st.session_state.articles:
@@ -638,6 +647,16 @@ def main():
         }
         selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
         time_range_hours = time_range_options[selected_time_range]
+        
+        # Avalai API URL selection
+        st.header("Translation Settings")
+        avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
+        st.session_state.avalai_api_url = st.selectbox(
+            "Avalai API URL",
+            options=avalai_api_url_options,
+            index=avalai_api_url_options.index(st.session_state.avalai_api_url),
+            help="Choose the Avalai API URL. Use https://api.avalai.ir/v1 for global access, or https://api.avalapis.ir/v1 for better performance inside Iran (only accessible from Iran)."
+        )
         
         # Add search button
         search_button = st.button("Search for News")
@@ -686,7 +705,7 @@ def main():
                     st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range or adjust the date.")
                 else:
                     articles = filtered_articles
-                articles = pre_process_articles(articles)  # Pre-process (translations only)
+                articles = pre_process_articles(articles, st.session_state.avalai_api_url)  # Pre-process with selected Avalai API URL
                 st.session_state.articles = articles
                 save_articles_to_file(articles)  # Save to temp file
                 st.session_state.selected_articles = []
