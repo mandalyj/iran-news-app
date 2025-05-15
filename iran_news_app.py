@@ -9,6 +9,7 @@ from io import BytesIO
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from bs4 import BeautifulSoup  # For extracting article content
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -63,10 +64,13 @@ st.markdown(
         margin: 10px 0;
     }
     .title-link {
-        font-size: 18px !important;
+        font-size: 20px !important; /* Increased by one unit */
         font-weight: bold !important;
         color: #1a73e8 !important;
         margin-bottom: 2px !important; /* Reduced margin to bring checkbox closer */
+        direction: rtl !important; /* Right-to-left alignment */
+        text-decoration: none !important; /* Remove underline */
+        font-family: "B Nazanin", "B Lotus", "Arial Unicode MS", sans-serif !important; /* Changed to B Nazanin or B Lotus */
     }
     .source-date {
         font-size: 14px !important;
@@ -415,6 +419,38 @@ def truncate_text(text, max_length=100):
         return text[:max_length].rsplit(" ", 1)[0] + "..."
     return text
 
+# Function to extract article content for Instant View
+def extract_article_content(url):
+    """
+    Extract the main content of an article from its URL for Instant View
+    """
+    try:
+        headers = {
+            "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
+        }
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Extract paragraphs (or main content)
+        paragraphs = soup.find_all('p')
+        content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
+        
+        if not content:
+            logger.warning(f"No content extracted from URL: {url}")
+            return "No content available."
+        
+        # Truncate to a reasonable length for Instant View
+        content = truncate_text(content, max_length=500)
+        logger.info(f"Extracted content (length: {len(content)}): {content}")
+        return content
+    except Exception as e:
+        error_msg = f"Error extracting content from {url}: {str(e)}"
+        logger.error(error_msg)
+        send_error_email(error_msg)
+        return "Unable to extract content."
+
 # Function to filter articles by time range
 def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None, disable_filter=False):
     """
@@ -592,7 +628,7 @@ def save_articles_to_file_for_download(articles, format="csv"):
         return json.dumps(articles, indent=2)
     return None
 
-# Function to send a message to Telegram (include only title, time, and truncated description)
+# Function to send a message to Telegram (include title, time, description, and Instant View)
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
@@ -805,10 +841,18 @@ def main():
                     tehran_time = parse_to_tehran_time(article["published_at"])
                     tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
                     truncated_description = truncate_text(article["translated_description"] or article["description"], max_length=100)
+                    
+                    # Extract content for Instant View
+                    article_content = extract_article_content(article["url"])
+                    # Translate the Instant View content
+                    translated_content = translate_with_avalai(article_content, source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                    logger.info(f"Translated Instant View content (length: {len(translated_content)}): {translated_content}")
+                    
                     message = (
                         f"*{article['translated_title'] or article['title']}*\n\n"
                         f"**زمان انتشار:** {tehran_time_str}\n\n"
                         f"{truncated_description}\n\n"
+                        f"**پیش‌نمایش مقاله (Instant View):**\n{translated_content}\n\n"
                         f"[ادامه مطلب]({article['url']})"
                     )
                     logger.info(f"Sending message (length: {len(message)}): {message}")
