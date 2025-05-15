@@ -52,28 +52,16 @@ st.markdown(
         font-size: 14px !important;
     }
     .article-section {
-        margin-bottom: 30px;
-        padding: 15px;
-        /* Removed border: 1px solid #ddd; */
-        position: relative;
+        margin-bottom: 20px;
+        padding: 0px;
         background-color: #f9f9f9;
     }
-    .article-section:before,
-    .article-section:after {
-        content: '';
-        position: absolute;
-        left: 0;
-        right: 0;
+    .neon-line-top,
+    .neon-line-bottom {
         height: 4px;
         background: linear-gradient(90deg, rgba(255, 0, 0, 0.8), rgba(255, 100, 100, 0.8), rgba(255, 0, 0, 0.8));
         box-shadow: 0 0 10px rgba(255, 0, 0, 0.7), 0 0 20px rgba(255, 0, 0, 0.5), 0 0 30px rgba(255, 100, 100, 0.3);
-        z-index: 1;
-    }
-    .article-section:before {
-        top: -5px;
-    }
-    .article-section:after {
-        bottom: -5px;
+        margin: 10px 0;
     }
     .title-link {
         font-size: 18px !important;
@@ -563,7 +551,8 @@ def display_news_articles(articles):
             truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
             
             st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-            # Use translated title instead of original title
+            # Neon line above the title
+            st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
             st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["translated_title"]}</a></h3>', unsafe_allow_html=True)
             st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
             if article["image_url"]:
@@ -573,6 +562,8 @@ def display_news_articles(articles):
                     st.info("Image could not be loaded")
             st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
             st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
+            # Neon line below the Persian description
+            st.markdown(f'<div class="neon-line-bottom"></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file for download
