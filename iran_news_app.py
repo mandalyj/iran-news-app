@@ -8,7 +8,7 @@ import base64
 from io import BytesIO
 import json
 import os
-from bs4 import BeautifulSoup # For extracting article content
+from bs4 import BeautifulSoup  # For extracting article content
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -20,15 +20,13 @@ GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
 COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
-FMP_API_URL = "https://financialmodelingprep.com/api/v3"
-FMP_API_KEY = os.environ.get("FMP_API_KEY", "YOUR_FMP_API_KEY")
 AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
 AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
-# Temporary file to store articles/reports and chat IDs
+# Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
 
@@ -59,12 +57,6 @@ st.markdown(
         padding: 0px;
         background-color: #f9f9f9;
     }
-    .report-section {
-        margin-bottom: 20px;
-        padding: 10px;
-        background-color: #e6f3ff;
-        border-radius: 5px;
-    }
     .neon-line-top {
         height: 4px;
         background: linear-gradient(90deg, rgba(255, 0, 0, 0.8), rgba(255, 100, 100, 0.8), rgba(255, 0, 0, 0.8));
@@ -72,13 +64,13 @@ st.markdown(
         margin: 10px 0;
     }
     .title-link {
-        font-size: 20px !important;
+        font-size: 20px !important; /* Increased by one unit */
         font-weight: bold !important;
         color: #1a73e8 !important;
-        margin-bottom: 2px !important;
-        direction: rtl !important;
-        text-decoration: none !important;
-        font-family: "B Nazanin", "B Lotus", "Arial Unicode MS", sans-serif !important;
+        margin-bottom: 2px !important; /* Reduced margin to bring checkbox closer */
+        direction: rtl !important; /* Right-to-left alignment */
+        text-decoration: none !important; /* Remove underline */
+        font-family: "B Nazanin", "B Lotus", "Arial Unicode MS", sans-serif !important; /* Changed to B Nazanin or B Lotus */
     }
     .source-date {
         font-size: 14px !important;
@@ -96,9 +88,10 @@ st.markdown(
 
 # Function to send error email (disabled as per user request)
 def send_error_email(error_message):
+    # Email sending is disabled as per user request
     logger.info(f"Error email sending is disabled. Error message: {error_message}")
 
-# Load articles/reports from temp file if exists
+# Load articles from temp file if exists
 def load_articles_from_file():
     try:
         if os.path.exists(TEMP_FILE):
@@ -110,7 +103,7 @@ def load_articles_from_file():
         send_error_email(f"Error loading articles from file: {str(e)}")
         return []
 
-# Save articles/reports to temp file
+# Save articles to temp file
 def save_articles_to_file(articles):
     try:
         with open(TEMP_FILE, "w") as f:
@@ -142,12 +135,15 @@ def save_chat_ids(chat_ids):
 
 # Fetch news from GNews API
 def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
+    """
+    Fetch news articles from GNews API
+    """
     if not GNEWS_API_KEY or GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
         error_msg = "Invalid GNews API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         send_error_email(error_msg)
         return [], error_msg
-
+    
     params = {
         "q": query,
         "apikey": GNEWS_API_KEY,
@@ -161,25 +157,25 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     logger.info(f"Sending GNews request with params: {params}")
-
+    
     try:
         response = requests.get(GNEWS_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         logger.info(f"GNews response: {data}")
-
+        
         if "errors" in data:
             error_msg = f"GNews API error: {data['errors']}"
             logger.error(error_msg)
             send_error_email(error_msg)
             return [], error_msg
-
+            
         articles = data.get("articles", [])
         if not articles:
             error_msg = f"No articles found for query '{query}' in GNews."
             logger.warning(error_msg)
             return [], error_msg
-
+            
         return [
             {
                 "title": a.get("title", "No title"),
@@ -189,8 +185,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "description": a.get("description", "") or "No description available",
                 "image_url": a.get("image", ""),
                 "translated_title": "",
-                "translated_description": "",
-                "type": "news"
+                "translated_description": ""
             }
             for a in articles
         ], None
@@ -202,12 +197,15 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
 
 # Fetch news from World News API
 def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
+    """
+    Fetch news articles from World News API
+    """
     if not WORLDNEWS_API_KEY or WORLDNEWS_API_KEY == "YOUR_WORLDNEWS_API_KEY":
         error_msg = "Invalid World News API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         send_error_email(error_msg)
         return [], error_msg
-
+    
     params = {
         "text": query,
         "api-key": WORLDNEWS_API_KEY,
@@ -222,25 +220,25 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     logger.info(f"Sending World News API request with params: {params}")
-
+    
     try:
         response = requests.get(WORLDNEWS_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
         logger.info(f"World News API response: {data}")
-
+        
         if "error" in data:
             error_msg = f"World News API error: {data.get('error', 'Unknown error')}"
             logger.error(error_msg)
             send_error_email(error_msg)
             return [], error_msg
-
+            
         articles = data.get("news", [])
         if not articles:
             error_msg = f"No articles found for query '{query}' in World News API."
             logger.warning(error_msg)
             return [], error_msg
-
+            
         return [
             {
                 "title": a.get("title", "No title"),
@@ -250,8 +248,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "description": a.get("text", "") or "No description available",
                 "image_url": a.get("image", ""),
                 "translated_title": "",
-                "translated_description": "",
-                "type": "news"
+                "translated_description": ""
             }
             for a in articles
         ], None
@@ -263,35 +260,40 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
 
 # Fetch crypto news from CoinGecko API with delay and retry
 def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
+    """
+    Fetch cryptocurrency news articles from CoinGecko API with a delay and retry mechanism to avoid rate limiting
+    """
     endpoint = f"{COINGECKO_API_URL}/news"
     headers = {
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     params = {
-        "limit": min(max_records, 100),
+        "limit": min(max_records, 100),  # CoinGecko allows limiting the number of results
     }
     logger.info(f"Sending CoinGecko news request with params: {params}")
-
-    retries = 3
-    delay = 5
+    
+    retries = 3  # تعداد تلاش‌های مجدد
+    delay = 5    # تأخیر اولیه 5 ثانیه
     for attempt in range(retries):
         try:
+            # Adding a 5-second delay to avoid hitting rate limits
             logger.info(f"Adding a {delay}-second delay before CoinGecko request (Attempt {attempt + 1}/{retries}) to avoid rate limiting...")
             time.sleep(delay)
-
+            
             response = requests.get(endpoint, params=params, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
             logger.info(f"CoinGecko news response: {data}")
-
+            
             articles = data.get("data", [])
             if not articles:
                 error_msg = f"No articles found for query '{query}' in CoinGecko."
                 logger.warning(error_msg)
                 return [], error_msg
-
+            
             formatted_articles = []
             for a in articles:
+                # Parse CoinGecko news structure
                 published_at = a.get("published_at", "")
                 if from_date and to_date:
                     article_date = parse_to_tehran_time(published_at)
@@ -299,11 +301,7 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
                         continue
                     start_datetime = datetime.strptime(from_date, "%Y-%m-%d")
                     end_datetime = datetime.strptime(to_date, "%Y-%m-%d")
-                    # Adjusting for timezone difference for date comparison
-                    start_datetime_tehran = start_datetime - timedelta(hours=3, minutes=30)
-                    end_datetime_tehran = end_datetime - timedelta(hours=3, minutes=30) + timedelta(days=1) # Include the whole end day
-
-                    if not (start_datetime_tehran <= article_date <= end_datetime_tehran):
+                    if not (start_datetime <= article_date <= end_datetime):
                         continue
                 formatted_articles.append({
                     "title": a.get("title", "No title"),
@@ -313,21 +311,19 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
                     "description": a.get("description", "") or "No description available",
                     "image_url": a.get("thumb", ""),
                     "translated_title": "",
-                    "translated_description": "",
-                    "type": "news"
+                    "translated_description": ""
                 })
-
+            
             return formatted_articles, None
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
                 logger.warning(f"Rate limit exceeded (429), retrying in {delay} seconds... (Attempt {attempt + 1}/{retries})")
                 if attempt < retries - 1:
                     time.sleep(delay)
-                    delay *= 2
+                    delay *= 2  # افزایش تأخیر به صورت نمایی (Exponential Backoff)
                 else:
                     error_msg = "Max retries exceeded for CoinGecko news due to rate limiting."
                     logger.error(error_msg)
-                    send_error_email(error_msg)
                     return [], error_msg
             else:
                 error_msg = f"Error fetching CoinGecko news: {str(e)}"
@@ -339,106 +335,38 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
             logger.error(error_msg)
             send_error_email(error_msg)
             return [], error_msg
-    # Fallback if all retries fail
-    error_msg = "Failed to fetch CoinGecko news after multiple retries."
-    logger.error(error_msg)
-    send_error_email(error_msg)
-    return [], error_msg
 
-
-# Fetch financial report from Financial Modeling Prep API
-def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
-    if not FMP_API_KEY or FMP_API_KEY == "YOUR_FMP_API_KEY":
-        error_msg = "Invalid Financial Modeling Prep API key. Please set a valid API key in Render environment variables."
-        logger.error(error_msg)
-        send_error_email(error_msg)
-        return [], error_msg
-
-    endpoint = f"{FMP_API_URL}/income-statement/{symbol}"
-    headers = {
-        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)",
-        "Content-Type": "application/json"
-    }
-    params = {
-        "limit": max_records,
-        "apikey": FMP_API_KEY
-    }
-    logger.info(f"Sending Financial Modeling Prep request for symbol {symbol} with params: {params}")
-
-    try:
-        response = requests.get(endpoint, params=params, headers=headers, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"Financial Modeling Prep response: {data}")
-
-        if not isinstance(data, list):
-            error_msg = f"Unexpected response format from Financial Modeling Prep: {data}"
-            logger.error(error_msg)
-            send_error_email(error_msg)
-            return [], error_msg
-
-        if not data:
-            error_msg = f"No financial reports found for symbol '{symbol}'."
-            logger.warning(error_msg)
-            return [], error_msg
-
-        reports = []
-        for report in data:
-            report_date = report.get("date", "")
-            if from_date and to_date:
-                report_datetime = datetime.strptime(report_date, "%Y-%m-%d")
-                start_datetime = datetime.strptime(from_date, "%Y-%m-%d")
-                end_datetime = datetime.strptime(to_date, "%Y-%m-%d")
-                if not (start_datetime <= report_datetime <= end_datetime):
-                    continue
-            reports.append({
-                "symbol": report.get("symbol", symbol),
-                "date": report_date,
-                "revenue": report.get("revenue", 0),
-                "netIncome": report.get("netIncome", 0),
-                "eps": report.get("eps", 0),
-                "grossProfit": report.get("grossProfit", 0),
-                "operatingIncome": report.get("operatingIncome", 0),
-                "reportedCurrency": report.get("reportedCurrency", "USD"),
-                "type": "report"
-            })
-
-        return reports, None
-    except Exception as e:
-        error_msg = f"Error fetching Financial Modeling Prep report: {str(e)}"
-        logger.error(error_msg)
-        send_error_email(error_msg)
-        return [], error_msg
-
-# Fetch news or reports from the selected API
+# Fetch news from the selected API
 def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
-    st.write(f"Starting fetch process from {selected_api}...")
-    logger.info(f"Fetching from {selected_api} for query: {query}, max_records: {max_records}, from_date: {from_date}, to_date: {to_date}")
-
-    all_items = []
+    """
+    Fetch news from the selected API
+    """
+    st.write(f"Starting news fetch process from {selected_api}...")
+    logger.info(f"Fetching news from {selected_api} for query: {query}, max_records: {max_records}, from_date: {from_date}, to_date: {to_date}")
+    
+    all_articles = []
     errors = []
-
+    
+    # Map selected API to the corresponding fetch function
     api_functions = {
         "GNews": fetch_gnews,
         "World News API": fetch_worldnews,
-        "CoinGecko (Crypto News)": fetch_coingecko_news,
-        "Financial Report (FMP)": fetch_financial_report
+        "CoinGecko (Crypto News)": fetch_coingecko_news
     }
-
+    
     fetch_function = api_functions.get(selected_api)
     if not fetch_function:
         error_msg = f"Invalid API selected: {selected_api}"
         logger.error(error_msg)
         st.error(error_msg)
         return []
-
+    
     try:
-        fetch_query = query if selected_api != "Financial Report (FMP)" else query.upper()
-        items, error = fetch_function(fetch_query, max_records, from_date, to_date)
-        st.write(f"Fetched {len(items)} items from {selected_api}")
-        logger.info(f"Fetched {len(items)} items from {selected_api}")
-        if items:
-            all_items.extend(items)
+        articles, error = fetch_function(query, max_records, from_date, to_date)
+        st.write(f"Fetched {len(articles)} articles from {selected_api}")
+        logger.info(f"Fetched {len(articles)} articles from {selected_api}")
+        if articles:
+            all_articles.extend(articles)
         if error:
             errors.append(f"{selected_api}: {error}")
     except Exception as e:
@@ -446,43 +374,45 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         errors.append(error_msg)
         st.error(error_msg)
         send_error_email(error_msg)
-
-    if selected_api != "Financial Report (FMP)":
-        seen_urls = set()
-        unique_items = []
-        for item in all_items:
-            if item["url"] not in seen_urls:
-                seen_urls.add(item["url"])
-                unique_items.append(item)
-        all_items = unique_items[:max_records]
-    else:
-        all_items = all_items[:max_records]
-
-    logger.info(f"After processing: {len(all_items)} items")
-
+    
+    # Remove duplicates based on URL
+    seen_urls = set()
+    unique_articles = []
+    for article in all_articles:
+        if article["url"] not in seen_urls:
+            seen_urls.add(article["url"])
+            unique_articles.append(article)
+    
+    # Limit the total number of articles to max_records
+    unique_articles = unique_articles[:max_records]
+    logger.info(f"After removing duplicates and limiting: {len(unique_articles)} articles")
+    
     for error in errors:
         st.error(error)
         send_error_email(error)
-
-    if all_items:
-        st.write(f"Successfully fetched {len(all_items)} items from {selected_api}!")
+    
+    if unique_articles:
+        st.write(f"Successfully fetched {len(unique_articles)} unique articles from {selected_api}!")
     else:
-        st.warning(f"No items fetched from {selected_api}. This might be due to API indexing delays or invalid query. Try adjusting the date range or query.")
-
-    return all_items
+        st.warning(f"No articles fetched from {selected_api}. This might be due to API indexing delays. Try adjusting the date range (e.g., search for articles from a few days ago).")
+    
+    return unique_articles
 
 # Function to translate text using Avalai API with /chat/completions
 def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT):
+    """
+    Translate text using Avalai API's /chat/completions endpoint
+    """
     if not text:
         logger.warning("Empty text provided for translation")
         return text
-
+    
     if not AVALAI_API_KEY or AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
         error_msg = "Invalid Avalai API key. Please set a valid API key in Render environment variables."
         logger.error(error_msg)
         send_error_email(error_msg)
         return text
-
+    
     endpoint = f"{avalai_api_url}/chat/completions"
     headers = {
         "Authorization": f"Bearer {AVALAI_API_KEY}",
@@ -490,162 +420,111 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     payload = {
-        "model": "gpt-4.1-nano", # Using a potentially faster/cheaper model for translation
+        "model": "gpt-4.1-nano",
         "messages": [
             {
-                "role": "system",
-                "content": f"You are a helpful translator. Translate the following text from {source_lang} to {target_lang}."
-            },
-            {
                 "role": "user",
-                "content": text
+                "content": f"Translate this text from {source_lang} to {target_lang}: {text}"
             }
-        ],
-        "max_tokens": 1000 # Limit response length for translation
+        ]
     }
-
+    
     try:
-        logger.info(f"Sending translation request to Avalai endpoint: {endpoint}")
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=20) # Increased timeout
+        logger.info(f"Sending translation request to Avalai: {payload}")
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"Avalai API response status: {response.status_code}")
-        logger.debug(f"Avalai API full response: {data}")
-
+        logger.info(f"Avalai API response: {data}")
+        
         if "choices" in data and len(data["choices"]) > 0:
-            translated_text = data["choices"][0]["message"]["content"].strip()
-            logger.info(f"Translation successful. Translated text snippet: {translated_text[:50]}...")
+            translated_text = data["choices"][0]["message"]["content"]
             return translated_text
         else:
-            error_msg = f"Avalai API response missing choices or choices is empty: {data}"
+            error_msg = f"Avalai API response missing choices: {data}"
             logger.warning(error_msg)
             send_error_email(error_msg)
-            return text # Return original text if translation fails
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Network or API error during Avalai translation: {str(e)}"
-        logger.error(error_msg)
-        send_error_email(error_msg)
-        return text # Return original text on error
+            return text
     except Exception as e:
-        error_msg = f"Unexpected error during Avalai translation: {str(e)}"
+        error_msg = f"Error translating with Avalai: {str(e)}"
         logger.error(error_msg)
         send_error_email(error_msg)
-        return text # Return original text on error
-
+        return text
 
 # Function to convert UTC time to Tehran time and return as datetime object
 def parse_to_tehran_time(utc_time_str):
+    """
+    Convert UTC time string to Tehran time (UTC+3:30) and return as datetime object
+    """
     if not utc_time_str:
         logger.warning("Empty time string provided")
         return None
-
+    
+    # Expanded list of possible time formats
     time_formats = [
-        "%Y-%m-%dT%H:%M:%SZ", # GNews
-        "%Y-%m-%d %H:%M:%S", # World News API (sometimes)
-        "%Y-%m-%dT%H:%M:%S", # World News API (sometimes)
-        "%Y-%m-%dT%H:%M:%S.%fZ", # GNews (sometimes)
-        "%Y-%m-%d %H:%M:%S.%f",
-        "%Y-%m-%dT%H:%M:%S%z",
-        "%Y-%m-%dT%H:%M:%S.%f%z",
-        "%Y-%m-%d",  # For financial reports (just date) or APIs with only date
-        "%Y-%m-%dT%H:%M:%S+00:00", # CoinGecko
+        "%Y-%m-%dT%H:%M:%SZ",           # 2025-05-14T12:34:56Z
+        "%Y-%m-%d %H:%M:%S",            # 2025-05-14 12:34:56
+        "%Y-%m-%dT%H:%M:%S",            # 2025-05-14T12:34:56
+        "%Y-%m-%dT%H:%M:%S.%fZ",        # 2025-05-14T12:34:56.789Z
+        "%Y-%m-%d %H:%M:%S.%f",         # 2025-05-14 12:34:56.789
+        "%Y-%m-%dT%H:%M:%S%z",          # 2025-05-14T12:34:56+0000
+        "%Y-%m-%dT%H:%M:%S.%f%z"        # 2025-05-14T12:34:56.789+0000 (CoinGecko format)
     ]
-
-    utc_time = None
+    
     for time_format in time_formats:
         try:
-            # Handle timezone info if present
-            if '%' in time_format and 'z' in time_format:
-                utc_time = datetime.strptime(utc_time_str, time_format)
-                # Convert to UTC if a timezone is parsed
-                if utc_time.tzinfo is not None:
-                    import pytz
-                    utc_time = utc_time.astimezone(pytz.utc).replace(tzinfo=None)
-            else:
-                utc_time = datetime.strptime(utc_time_str, time_format)
-
-            # If only date is parsed, assume midnight UTC
-            if len(utc_time_str.split('T')) == 1 and '-' in utc_time_str and ':' not in utc_time_str:
-                utc_time = datetime.strptime(utc_time_str, "%Y-%m-%d")
-
+            utc_time = datetime.strptime(utc_time_str, time_format)
             tehran_time = utc_time + timedelta(hours=3, minutes=30)
-            logger.info(f"Successfully parsed time: {utc_time_str} -> {tehran_time} (Tehran Time)")
+            logger.info(f"Successfully parsed time: {utc_time_str} -> {tehran_time}")
             return tehran_time
         except ValueError:
             continue
-        except Exception as e:
-            logger.error(f"Unexpected error parsing time {utc_time_str} with format {time_format}: {str(e)}")
-            continue
-
-    error_msg = f"Error converting time: Invalid format or parsing error - Input: {utc_time_str}"
+    
+    error_msg = f"Error converting time: Invalid format - Input: {utc_time_str}"
     logger.warning(error_msg)
     send_error_email(error_msg)
     return None
 
-
 # Function to format Tehran time for display
 def format_tehran_time(tehran_time):
-    if not isinstance(tehran_time, datetime):
-        logger.warning(f"Invalid input for format_tehran_time: {tehran_time}")
-        return str(tehran_time) # Return as is if not a datetime object
+    """
+    Format Tehran time for display
+    """
     return tehran_time.strftime("%Y/%m/%d - %H:%M")
 
 # Function to truncate text to a specified length
 def truncate_text(text, max_length=100):
-    if not isinstance(text, str):
-        return str(text)
+    """
+    Truncate text to a specified length and add ellipsis if necessary
+    """
     if len(text) > max_length:
         return text[:max_length].rsplit(" ", 1)[0] + "..."
     return text
 
-# Function to extract article content for Instant View (Simplified)
+# Function to extract article content for Instant View
 def extract_article_content(url):
+    """
+    Extract the main content of an article from its URL for Instant View
+    """
     try:
         headers = {
             "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
         }
-        logger.info(f"Attempting to extract content from: {url}")
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
-
+        
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Attempt to find common article content containers
-        possible_containers = [
-            'article',
-            '.article-content',
-            '.entry-content',
-            '.post-content',
-            '.story-body',
-            'main',
-            'body' # Fallback
-        ]
-
-        content_element = None
-        for selector in possible_containers:
-            content_element = soup.select_one(selector)
-            if content_element:
-                break
-
-        content = ""
-        if content_element:
-            paragraphs = content_element.find_all('p')
-            content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
-        else:
-            # If no specific container found, just get all paragraphs in the body
-            paragraphs = soup.find_all('p')
-            content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
-
-
-        if not content or len(content.split()) < 20: # Minimum word count check
-            logger.warning(f"Insufficient content extracted from URL: {url}. Length: {len(content)}")
-            return "No significant content available or extraction failed."
-
-        # Basic cleaning
-        content = content.replace('\n', ' ').strip()
-        content = ' '.join(content.split()) # Remove multiple spaces
-
-        logger.info(f"Extracted content (length: {len(content)}): {content[:200]}...")
+        
+        # Extract paragraphs (or main content)
+        paragraphs = soup.find_all('p')
+        content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
+        
+        if not content:
+            logger.warning(f"No content extracted from URL: {url}")
+            return "No content available."
+        
+        # Truncate to a reasonable length for Instant View
+        content = truncate_text(content, max_length=500)
+        logger.info(f"Extracted content (length: {len(content)}): {content}")
         return content
     except Exception as e:
         error_msg = f"Error extracting content from {url}: {str(e)}"
@@ -653,475 +532,467 @@ def extract_article_content(url):
         send_error_email(error_msg)
         return "Unable to extract content."
 
-
-# Function to filter items by time range (for news only)
-def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
-    if not items:
+# Function to filter articles by time range
+def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None, disable_filter=False):
+    """
+    Filter articles based on the selected time range or date range
+    """
+    if not articles:
         return []
-
-    # Do not filter financial reports by time range
-    if items and items[0].get("type") == "report":
-        return items
-
+    
     if disable_filter:
         logger.info("Time filter disabled. Returning all articles.")
-        return items
-
-    filtered_items = []
+        return articles
+    
+    filtered_articles = []
+    
     current_utc_time = datetime.utcnow()
-    tehran_timezone_offset = timedelta(hours=3, minutes=30)
-    current_tehran_time = current_utc_time + tehran_timezone_offset
-
-    if time_range_hours == float("inf"): # Custom date range
-        if start_date and end_date:
-            try:
-                # Convert start/end dates (from UI) to datetime objects for comparison
-                # Note: parse_to_tehran_time now returns Tehran time. We compare Tehran times.
-                start_datetime_tehran = datetime.combine(start_date, datetime.min.time()) + tehran_timezone_offset
-                end_datetime_tehran = datetime.combine(end_date, datetime.max.time()) + tehran_timezone_offset
-
-                for item in items:
-                    published_time_tehran = parse_to_tehran_time(item["published_at"]) # Already Tehran time
-
-                    if published_time_tehran:
-                        logger.info(f"Article Tehran time: {published_time_tehran}, Start Tehran: {start_datetime_tehran}, End Tehran: {end_datetime_tehran}")
-                        if start_datetime_tehran <= published_time_tehran <= end_datetime_tehran:
-                            filtered_items.append(item)
-                    else:
-                        logger.warning(f"Skipping article due to unparseable time: {item['published_at']}")
-            except Exception as e:
-                logger.error(f"Error filtering by custom date range: {str(e)}")
-                send_error_email(f"Error filtering by custom date range: {str(e)}")
-                # If filtering fails, return all items to be safe
-                return items
-    else: # Relative time range
-        cutoff_time_tehran = current_tehran_time - timedelta(hours=time_range_hours)
-        for item in items:
-            published_time_tehran = parse_to_tehran_time(item["published_at"])
-            if published_time_tehran:
-                logger.info(f"Article Tehran time: {published_time_tehran}, Cutoff Tehran time: {cutoff_time_tehran}")
-                if published_time_tehran >= cutoff_time_tehran:
-                    filtered_items.append(item)
+    current_tehran_time = current_utc_time + timedelta(hours=3, minutes=30)
+    
+    if time_range_hours == float("inf"):
+        start_datetime = datetime.combine(start_date, datetime.min.time()) + timedelta(hours=3, minutes=30)
+        end_datetime = datetime.combine(end_date, datetime.max.time()) + timedelta(hours=3, minutes=30)
+        
+        for article in articles:
+            published_time = parse_to_tehran_time(article["published_at"])
+            if published_time:
+                logger.info(f"Article time: {published_time}, Start: {start_datetime}, End: {end_datetime}")
+                if start_datetime <= published_time <= end_datetime:
+                    filtered_articles.append(article)
             else:
-                logger.warning(f"Skipping article due to unparseable time: {item['published_at']}")
+                logger.warning(f"Skipping article due to unparseable time: {article['published_at']}")
+    else:
+        cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
+        for article in articles:
+            published_time = parse_to_tehran_time(article["published_at"])
+            if published_time:
+                logger.info(f"Article time: {published_time}, Cutoff: {cutoff_time}")
+                if published_time >= cutoff_time:
+                    filtered_articles.append(article)
+            else:
+                logger.warning(f"Skipping article due to unparseable time: {article['published_at']}")
+    
+    logger.info(f"After filtering: {len(filtered_articles)} articles remain out of {len(articles)}")
+    return filtered_articles
 
-    logger.info(f"After filtering: {len(filtered_items)} items remain out of {len(items)}")
-    return filtered_items
-
-
-# Function to pre-process articles (translations only, skip for reports)
-def pre_process_articles(items, avalai_api_url, enable_translation=False, num_items_to_translate=1):
-    if not items:
-        return items
-
-    # Do not translate financial reports
-    if items and items[0].get("type") == "report":
-        return items
-
-    # Sort items by date before translating the latest ones
-    sorted_items = sorted(
-        items,
+# Function to pre-process articles (translations only)
+def pre_process_articles(articles, avalai_api_url, enable_translation=False, num_articles_to_translate=1):
+    """
+    Pre-process articles by translating with Avalai, only for the specified number of newest articles
+    """
+    if not articles:
+        return articles
+    
+    # Sort articles by publication time (newest first)
+    sorted_articles = sorted(
+        articles,
         key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
         reverse=True
     )
-    logger.info(f"Sorted {len(sorted_items)} items for translation processing")
-
-    processed_items = []
-    for i, item in enumerate(sorted_items):
-        processed_item = item.copy() # Work on a copy to avoid modifying original list during iteration
-
+    logger.info(f"Sorted {len(sorted_articles)} articles for translation processing")
+    
+    for i, article in enumerate(sorted_articles):
         try:
-            if enable_translation and i < num_items_to_translate:
-                logger.info(f"Translating item {i+1}: {processed_item['title']}")
-                translated_title = translate_with_avalai(processed_item["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-                logger.info(f"Translated title for item {i+1}: {translated_title[:50]}...")
-                processed_item["translated_title"] = translated_title
-
-                translated_description = translate_with_avalai(processed_item["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-                logger.info(f"Translated description for item {i+1}: {translated_description[:50]}...")
-                processed_item["translated_description"] = translated_description
-
-                if translated_description == processed_item["description"] and processed_item["description"]:
-                    # This check might be too simple, as a short text might translate to itself
-                    # Consider adding a more robust check or just log a warning.
-                    logger.info(f"Translation for description of item {i+1} returned original text.")
+            # Only translate the specified number of newest articles
+            if enable_translation and i < num_articles_to_translate:
+                logger.info(f"Translating article {i+1}: {article['title']}")
+                # Translate title
+                translated_title = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                logger.info(f"Translated title for article {i+1}: {translated_title}")
+                article["translated_title"] = translated_title
+                
+                # Translate description
+                translated_description = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
+                logger.info(f"Translated description for article {i+1}: {translated_description}")
+                article["translated_description"] = translated_description
+                
+                # Check if translation failed for description
+                if translated_description == article["description"]:
+                    st.warning(f"Translation failed for description of article {i+1}: {article['title']}")
+                    logger.warning(f"Translation failed for description of article {i+1}: {article['title']}")
             else:
-                processed_item["translated_title"] = processed_item["title"]
-                processed_item["translated_description"] = processed_item["description"]
-                if enable_translation and i >= num_items_to_translate:
-                    logger.info(f"Skipping translation for item {i+1}: {processed_item['title']} (beyond limit of {num_items_to_translate})")
-                    # st.info(f"Item {i+1} ({processed_item['title']}) skipped for translation (beyond limit of {num_items_to_translate})")
-
-            processed_items.append(processed_item)
-
+                article["translated_title"] = article["title"]
+                article["translated_description"] = article["description"]
+                if enable_translation and i >= num_articles_to_translate:
+                    logger.info(f"Skipping translation for article {i+1}: {article['title']} (beyond limit of {num_articles_to_translate})")
+                    st.info(f"Article {i+1} ({article['title']}) skipped for translation (beyond limit of {num_articles_to_translate})")
         except Exception as e:
-            st.error(f"Error processing item {processed_item.get('title', 'Unknown Title')}: {str(e)}")
-            logger.error(f"Error in pre_process_articles for item {processed_item.get('title', 'Unknown Title')}: {str(e)}")
-            send_error_email(f"Error in pre_process_articles: {str(e)} - Item: {processed_item.get('title', 'Unknown Title')}")
-            processed_items.append(processed_item) # Append original item if processing fails
+            st.error(f"Error processing article {article['title']}: {str(e)}")
+            logger.error(f"Error in pre_process_articles: {str(e)}")
+            send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
+    return sorted_articles
 
-    return processed_items
-
-
-# Function to display items (news or reports) in a nice format
-def display_items(items):
-    st.write(f"Attempting to display {len(items)} items...")
-    logger.info(f"Displaying {len(items)} items")
-
-    if not items:
-        st.warning("No items to display. This might be due to filtering or no items being fetched.")
+# Function to display news articles in a nice format (two columns)
+def display_news_articles(articles):
+    """Display news articles in a structured format with two columns"""
+    st.write(f"Attempting to display {len(articles)} articles...")
+    logger.info(f"Displaying {len(articles)} articles: {articles}")
+    
+    if not articles:
+        st.warning("No news articles to display. This might be due to filtering or no articles being fetched.")
         return
-
-    item_type = items[0].get("type", "news")
-
-    if item_type == "news":
-        sorted_items = sorted(
-            items,
-            key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
-            reverse=True
-        )
-        logger.info(f"Sorted articles: {len(sorted_items)} articles after sorting")
-
-        st.subheader("News Statistics")
-        if sorted_items:
-            sources = pd.DataFrame([item["source"] for item in sorted_items]).value_counts().reset_index()
-            sources.columns = ["Source", "Count"]
-            if len(sources) > 1:
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.bar_chart(sources.set_index("Source"))
-                with col2:
-                    st.dataframe(sources)
-            else:
-                st.write(f"All articles from: {sources.iloc[0, 0]}")
-        else:
-            st.info("No news items to display statistics.")
-
-
-        st.subheader("Selected Articles")
-        # Use item URL as a unique identifier for selection state
-        selected_urls = {a.get('url') for a in st.session_state.selected_items}
-        selected_count = len(selected_urls)
-        st.write(f"You have selected {selected_count} article(s) to send to Telegram")
-        logger.info(f"Current selected items (by URL): {selected_urls}")
-
-
-        st.subheader("News Articles")
+    
+    sorted_articles = sorted(
+        articles,
+        key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
+        reverse=True
+    )
+    logger.info(f"Sorted articles: {len(sorted_articles)} articles after sorting")
+    
+    st.subheader("News Statistics")
+    sources = pd.DataFrame([article["source"] for article in sorted_articles]).value_counts().reset_index()
+    sources.columns = ["Source", "Count"]
+    if len(sources) > 1:
         col1, col2 = st.columns(2)
-        for i, item in enumerate(sorted_items):
-            current_col = col1 if i % 2 == 0 else col2
-
-            with current_col:
-                st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
-                logger.info(f"Rendering article {i+1}: {item['title']}")
-
-                item_url = item.get('url')
-                is_selected = item_url in selected_urls
-                checkbox_key = f"article_select_{item_url}_{i}" # Unique key including URL and index
-
-                if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-                    if not is_selected:
-                        st.session_state.selected_items.append(item)
-                        logger.info(f"Added article to selected: {item['title']}")
-                        # Update the selected_urls set immediately
-                        selected_urls.add(item_url)
-                else:
-                    if is_selected:
-                        # Remove the item based on URL
-                        st.session_state.selected_items = [a for a in st.session_state.selected_items if a.get('url') != item_url]
-                        logger.info(f"Removed article from selected: {item['title']}")
-                        # Update the selected_urls set immediately
-                        selected_urls.discard(item_url)
-
-
-                tehran_time = parse_to_tehran_time(item["published_at"])
-                tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-                truncated_description = truncate_text(item["description"], max_length=200) # Increased description truncate
-                truncated_translated_description = truncate_text(item["translated_description"], max_length=200) # Increased description truncate
-
-                st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-                st.markdown(f'<h3 class="title-link"><a href="{item["url"]}" target="_blank">{item["translated_title"]}</a></h3>', unsafe_allow_html=True)
-                st.markdown(f'<div class="source-date">**Source:** {item["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-                if item["image_url"]:
-                    try:
-                        # Add a caption or descriptive text for the image if available
-                        st.image(item["image_url"], width=300, caption=item.get("title", "Article Image"))
-                    except Exception as e:
-                        logger.warning(f"Could not load image from {item['image_url']}: {str(e)}")
-                        st.info("Image could not be loaded")
-                st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-    else: # Financial Reports
-        st.subheader("Financial Reports")
-        for i, report in enumerate(items):
-            st.markdown(f'<div class="report-section">', unsafe_allow_html=True)
-            st.markdown(f"**نماد شرکت:** {report['symbol']}", unsafe_allow_html=True)
-            st.markdown(f"**تاریخ گزارش:** {report['date']}", unsafe_allow_html=True)
-            st.markdown(f"**ارز گزارش:** {report['reportedCurrency']}", unsafe_allow_html=True)
-            st.markdown(f"**درآمد:** {report['revenue']:,} {report['reportedCurrency']}", unsafe_allow_html=True)
-            st.markdown(f"**سود خالص:** {report['netIncome']:,} {report['reportedCurrency']}", unsafe_allow_html=True)
-            st.markdown(f"**سود هر سهم (EPS):** {report['eps']}", unsafe_allow_html=True)
-            st.markdown(f"**سود ناخالص:** {report['grossProfit']:,} {report['reportedCurrency']}", unsafe_allow_html=True)
-            st.markdown(f"**درآمد عملیاتی:** {report['operatingIncome']:,} {report['reportedCurrency']}", unsafe_allow_html=True)
+        with col1:
+            st.bar_chart(sources.set_index("Source"))
+        with col2:
+            st.dataframe(sources)
+    else:
+        st.write(f"All articles from: {sources.iloc[0, 0]}")
+    
+    st.subheader("Selected Articles")
+    selected_count = len(st.session_state.selected_articles)
+    st.write(f"You have selected {selected_count} article(s) to send to Telegram")
+    logger.info(f"Current selected articles: {st.session_state.selected_articles}")
+    
+    st.subheader("News Articles")
+    # Create two columns for displaying articles
+    col1, col2 = st.columns(2)
+    for i, article in enumerate(sorted_articles):
+        # Alternate between columns
+        current_col = col1 if i % 2 == 0 else col2
+        
+        with current_col:
+            # Neon line above the article title
+            st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
+            logger.info(f"Rendering article {i+1}: {article['title']}")
+            
+            is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
+            checkbox_key = f"article_{i}"
+            if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
+                if not is_selected:
+                    st.session_state.selected_articles.append(article)
+                    logger.info(f"Added article to selected: {article['title']}")
+            else:
+                if is_selected:
+                    st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
+                    logger.info(f"Removed article from selected: {article['title']}")
+            
+            tehran_time = parse_to_tehran_time(article["published_at"])
+            tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
+            truncated_description = truncate_text(article["description"], max_length=100)
+            truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
+            
+            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
+            st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["translated_title"]}</a></h3>', unsafe_allow_html=True)
+            st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
+            if article["image_url"]:
+                try:
+                    st.image(article["image_url"], width=300)
+                except:
+                    st.info("Image could not be loaded")
+            st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-# Function to save items to a file for download
-def save_items_to_file_for_download(items, format="csv"):
-    if not items:
+# Function to save articles to a file for download
+def save_articles_to_file_for_download(articles, format="csv"):
+    if not articles:
         return None
-    df = pd.DataFrame(items)
+    df = pd.DataFrame(articles)
     if format == "csv":
         buffer = BytesIO()
         df.to_csv(buffer, index=False)
         return buffer.getvalue()
     elif format == "json":
-        return json.dumps(items, indent=2, ensure_ascii=False).encode('utf-8') # Ensure proper encoding
+        return json.dumps(articles, indent=2)
     return None
 
-# Function to send a message to Telegram (include title, description, time, and Instant View for news; financial data for reports)
+# Function to send a message to Telegram (include title, description, time, and Instant View)
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
-        error_msg = "Telegram bot token is not set. Cannot send messages."
-        logger.error(error_msg)
-        st.error(error_msg)
-        send_error_email(error_msg)
-        return False
-
     try:
-        # Telegram message limit is 4096 characters. Split into multiple messages if needed.
-        max_chars = 4000 # Keep a buffer
-        messages_to_send = [message[i:i + max_chars] for i in range(0, len(message), max_chars)]
-
-        success = True
-        for msg_part in messages_to_send:
-            url = f"{TELEGRAM_API_URL}/sendMessage"
-            data = {
-                "chat_id": chat_id,
-                "text": msg_part,
-                "parse_mode": "Markdown",
-                "disable_web_page_preview": disable_web_page_preview
-            }
-            logger.info(f"Sending message to chat ID {chat_id}: {msg_part[:100]}...")
-
-            response = requests.post(url, json=data, timeout=10)
-            response_data = response.json()
-            logger.info(f"Telegram API response for sendMessage: {response_data}")
-
-            if response.status_code != 200 or not response_data.get("ok"):
-                error_msg = f"Error sending message to Telegram chat ID {chat_id}: {response_data.get('description', 'Unknown error')}"
-                logger.error(error_msg)
-                st.error(error_msg)
-                send_error_email(error_msg)
-                success = False # Mark as failed but try sending other parts
-
-        return success
-
+        if len(message) > 4096:
+            message = message[:4093] + "..."
+        
+        url = f"{TELEGRAM_API_URL}/sendMessage"
+        data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
+        response = requests.post(url, data=data, timeout=10)
+        response.raise_for_status()
+        result = response.json()
+        if result.get("ok"):
+            return True, "Message sent successfully"
+        return False, f"Error: {result.get('description', 'Unknown error')}"
+    except requests.exceptions.RequestException as e:
+        return False, f"Error sending message: {str(e)}"
     except Exception as e:
-        error_msg = f"Exception during Telegram message sending to chat ID {chat_id}: {str(e)}"
-        logger.error(error_msg)
-        st.error(error_msg)
-        send_error_email(error_msg)
-        return False
+        return False, f"Unexpected error: {str(e)}"
 
+# Function to get Chat ID from Telegram username
+def get_chat_id_from_username(username, chat_ids):
+    """
+    Get Chat ID from Telegram username using stored chat IDs or getUpdates
+    """
+    try:
+        if not username.startswith("@"):
+            return None, "Username must start with @ (e.g., @username)"
+        
+        username = username[1:].lower()
+        
+        if username in chat_ids:
+            return chat_ids[username], None
+        
+        url = f"{TELEGRAM_API_URL}/getUpdates"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get("ok"):
+            return None, "Failed to fetch updates from Telegram"
+        
+        for update in data.get("result", []):
+            if "message" in update and "chat" in update["message"]:
+                chat = update["message"]["chat"]
+                if chat.get("username", "").lower() == username:
+                    chat_id = chat["id"]
+                    chat_ids[username] = chat_id
+                    save_chat_ids(chat_ids)
+                    return chat_id, None
+                if chat.get("type") == "group" or chat.get("type") == "supergroup":
+                    if chat.get("title", "").lower().find(username.lower()) != -1:
+                        chat_id = chat["id"]
+                        chat_ids[username] = chat_id
+                        save_chat_ids(chat_ids)
+                        return chat_id, None
+        
+        return None, f"Chat ID not found for username @{username}. Make sure the user/group has interacted with the bot."
+    except Exception as e:
+        logger.warning(f"Error fetching Chat ID for username {username}: {str(e)}")
+        send_error_email(f"Error fetching Chat ID for username {username}: {str(e)}")
+        return None, str(e)
 
-# --- Streamlit App Layout ---
-
-st.title("Iran News and Financial Report Aggregator")
-
-# Sidebar for API keys, settings, and Telegram
-with st.sidebar:
-    st.header("Configuration")
-
-    st.warning("API keys are read from environment variables. If you see 'YOUR_API_KEY' placeholders, please set the environment variables (GNEWS_API_KEY, WORLDNEWS_API_KEY, FMP_API_KEY, AVALAI_API_KEY, TELEGRAM_BOT_TOKEN) on your hosting platform (e.g., Render.com).")
-
-    st.header("Data Sources")
-    selected_api = st.selectbox(
-        "Select API:",
-        ["GNews", "World News API", "CoinGecko (Crypto News)", "Financial Report (FMP)"]
-    )
-
-    query = st.text_input(
-        f"Enter Query/Symbol for {selected_api}:",
-        value="Iran" if selected_api != "Financial Report (FMP)" else "AAPL" # Default query
-    )
-
-    max_records = st.slider(
-        "Maximum number of records:",
-        min_value=1,
-        max_value=100,
-        value=20,
-        step=1
-    )
-
-    st.header("Time Filtering")
-    time_filter_option = st.radio(
-        "Select time range:",
-        ["Last Hour", "Last 24 Hours", "Last 7 Days", "Custom Date Range", "Disable Filter"]
-    )
-
-    from_date, to_date = None, None
-    date_range = None # Initialize date_range to None
-    if time_filter_option == "Custom Date Range":
-        # Ensure date_input always returns a tuple, even if only one date is selected initially
-        date_range_input = st.date_input("Select date range", value=(datetime.now() - timedelta(days=7)).date(), key='date_range')
-        if isinstance(date_range_input, tuple) and len(date_range_input) == 2:
-            date_range = date_range_input
-            from_date = date_range[0].strftime("%Y-%m-%d")
-            to_date = date_range[1].strftime("%Y-%m-%d")
-        elif isinstance(date_range_input, datetime):
-            date_range = (date_range_input, date_range_input) # Treat single date as a range
-            from_date = date_range[0].strftime("%Y-%m-%d")
-            to_date = date_range[1].strftime("%Y-%m-%d")
-
-
-        logger.info(f"Custom date range selected: From {from_date} to {to_date}")
+# Main Streamlit app
+def main():
+    st.title("Iran News Aggregator")
+    
+    if 'selected_articles' not in st.session_state:
+        st.session_state.selected_articles = []
+    if 'articles' not in st.session_state:
+        st.session_state.articles = load_articles_from_file()
+    if 'chat_ids' not in st.session_state:
+        st.session_state.chat_ids = load_chat_ids()
+    if 'avalai_api_url' not in st.session_state:
+        st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
+    
+    if not st.session_state.articles:
+        st.info("No articles in session state. Please search for news or check if data was loaded from file.")
+        logger.info("No articles in session state at start.")
     else:
-        from_date, to_date = None, None # Reset date range inputs if not in custom mode
-        date_range = None
-
-
-    time_range_hours = {
-        "Last Hour": 1,
-        "Last 24 Hours": 24,
-        "Last 7 Days": 7 * 24,
-        "Custom Date Range": float("inf"), # Use infinity to indicate custom date range
-        "Disable Filter": None # None indicates no time filter
-    }.get(time_filter_option)
-
-    disable_time_filter = (time_filter_option == "Disable Filter")
-
-    st.header("Translation Settings (News Only)")
-    enable_translation = st.checkbox("Enable Translation (English to Persian)", value=False)
-    num_items_to_translate = st.slider(
-        "Number of latest items to translate:",
-        min_value=0,
-        max_value=max_records,
-        value=1,
-        step=1,
-        disabled=not enable_translation
-    )
-    avalai_api_url = st.text_input("Avalai API URL", value=AVALAI_API_URL_DEFAULT, disabled=not enable_translation)
-
-
-    st.header("Telegram Settings")
-    chat_ids = load_chat_ids()
-    current_chat_id = chat_ids.get("default_chat_id", "")
-    telegram_chat_id = st.text_input("Telegram Chat ID (e.g., -1001234567890)", value=current_chat_id)
-
-    # Save chat ID when input changes
-    if telegram_chat_id and telegram_chat_id != current_chat_id:
-        chat_ids["default_chat_id"] = telegram_chat_id
-        save_chat_ids(chat_ids)
-        logger.info(f"Saved default Telegram Chat ID: {telegram_chat_id}")
-
-
-# --- Main Content Area ---
-
-if 'fetched_items' not in st.session_state:
-    st.session_state.fetched_items = []
-
-if 'selected_items' not in st.session_state:
-    st.session_state.selected_items = []
-
-# Fetch Button
-if st.button(f"Fetch from {selected_api}"):
-    st.session_state.selected_items = [] # Clear selected items on new fetch
-    with st.spinner(f"Fetching data from {selected_api}..."):
-        fetched_items = fetch_news(selected_api, query, from_date=from_date, to_date=to_date, max_records=max_records) # Pass dates and max_records to fetch_news
-
-        if selected_api != "Financial Report (FMP)":
-            # Apply time filter before translation and display for news
-            filtered_items = filter_articles_by_time(fetched_items, time_range_hours, date_range[0] if time_filter_option == "Custom Date Range" and date_range else None, date_range[1] if time_filter_option == "Custom Date Range" and date_range else None, disable_time_filter)
-            # Pre-process (translate) filtered news items
-            processed_items = pre_process_articles(filtered_items, avalai_api_url, enable_translation, num_items_to_translate)
-        else:
-            # No time filter or translation for financial reports displayed here, they are filtered by date in fetch_financial_report
-            processed_items = fetched_items # Financial reports are already filtered by date in fetch_financial_report if dates are provided
-
-        st.session_state.fetched_items = processed_items # Store processed items
-        # Corrected line: Check the length of fetched_items, not a non-existent 'items'
-        st.info(f"Found {len(st.session_state.fetched_items)} items in session state!")
-
-
-# Display fetched items
-if st.session_state.fetched_items:
-    display_items(st.session_state.fetched_items)
-
-# Send to Telegram Button
-if st.session_state.selected_items:
-    st.subheader("Send to Telegram")
-    if not telegram_chat_id:
-        st.warning("Please enter a Telegram Chat ID in the sidebar to send messages.")
-    elif st.button(f"Send {len(st.session_state.selected_items)} Selected Item(s) to Telegram"):
-        with st.spinner(f"Sending {len(st.session_state.selected_items)} item(s) to Telegram..."):
-            all_successful = True
-            for item in st.session_state.selected_items:
-                if item["type"] == "news":
-                    tehran_time = parse_to_tehran_time(item["published_at"])
-                    tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-
-                    # Consider extracting full content for Telegram message if needed
-                    # extracted_content = extract_article_content(item["url"])
-                    # message = f"*{item['translated_title']}*\n\nSource: {item['source']} | Published: {tehran_time_str}\n\n{extracted_content}\n\n[Read More]({item['url']})"
-
-                    # Using the translated description and linking to the original article
-                    message = f"*{item['translated_title']}*\n\n**منبع:** {item['source']} | **انتشار:** {tehran_time_str}\n\n{item['translated_description']}\n\n[Read More]({item['url']})"
-
-                    # Disable web page preview for news articles to avoid duplicate display in Telegram
-                    if not send_telegram_message(telegram_chat_id, message, disable_web_page_preview=True):
-                        all_successful = False
-                        logger.error(f"Failed to send article: {item['title']}")
-                else: # Financial Reports
-                    message = f"**گزارش مالی:** {item['symbol']}\n\n**تاریخ گزارش:** {item['date']}\n**ارز گزارش:** {item['reportedCurrency']}\n**درآمد:** {item['revenue']:,} {item['reportedCurrency']}\n**سود خالص:** {item['netIncome']:,} {item['reportedCurrency']}\n**سود هر سهم (EPS):** {item['eps']}\n**سود ناخالص:** {item['grossProfit']:,} {item['reportedCurrency']}\n**درآمد عملیاتی:** {item['operatingIncome']:,} {item['reportedCurrency']}"
-
-                    if not send_telegram_message(telegram_chat_id, message):
-                        all_successful = False
-                        logger.error(f"Failed to send report for symbol: {item['symbol']}")
-
-
-                time.sleep(0.5) # Add a small delay between sending messages
-
-
-            if all_successful:
-                st.success("Selected item(s) sent to Telegram successfully!")
-                # Optional: Clear selected items after sending
-                # st.session_state.selected_items = []
-                # st.rerun() # Rerun to update the UI and remove checkboxes
-            else:
-                st.error("Some items failed to send to Telegram.")
-
-# Download Button
-if st.session_state.fetched_items:
-    st.subheader("Download Data")
-    download_format = st.selectbox("Select download format:", ["csv", "json"])
-    download_data = save_items_to_file_for_download(st.session_state.fetched_items, download_format)
-    if download_data is not None: # Check if download_data is not None
-        file_extension = download_format
-        mime_type = "text/csv" if download_format == "csv" else "application/json"
-        st.download_button(
-            label=f"Download Data as .{file_extension}",
-            data=download_data,
-            file_name=f"iran_news_and_reports.{file_extension}",
-            mime=mime_type,
+        st.info(f"Found {len(st.session_state.articles)} articles in session state.")
+        logger.info(f"Found {len(st.session_state.articles)} articles in session state at start.")
+    
+    with st.sidebar:
+        st.header("Query Settings")
+        query = st.text_input("Search Query", value="Iran", key="search_query").strip()
+        today = datetime(2025, 5, 14)
+        default_start_date = today - timedelta(days=7)
+        start_date = st.date_input("Start Date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today, key="start_date")
+        end_date = st.date_input("End Date", value=today, min_value=start_date, max_value=today, key="end_date")
+        max_articles = st.slider(label="Maximum number of articles", min_value=5, max_value=100, value=20, key="max_articles")
+        
+        # Add API selection box
+        api_options = ["GNews", "World News API", "CoinGecko (Crypto News)"]
+        selected_api = st.selectbox("Select News API", options=api_options, index=0, key="selected_api")
+        
+        time_range_options = {
+            "Last 30 minutes": 0.5,
+            "Last 1 hour": 1,
+            "Last 4 hours": 4,
+            "Last 12 hours": 12,
+            "Last 24 hours": 24,
+            "All articles": float("inf")
+        }
+        selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
+        time_range_hours = time_range_options[selected_time_range]
+        
+        disable_time_filter = st.checkbox("Disable Time Filter (Show All Articles)", value=False, key="disable_time_filter")
+        
+        st.header("Translation Settings")
+        avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
+        st.session_state.avalai_api_url = st.selectbox(
+            "Avalai API URL",
+            options=avalai_api_url_options,
+            index=avalai_api_url_options.index(st.session_state.avalai_api_url),
+            help="Choose the Avalai API URL. Use https://api.avalai.ir/v1 for global access, or https://api.avalapis.ir/v1 for better performance inside Iran (only accessible from Iran)."
         )
+        
+        enable_translation = st.checkbox("Enable Translation (May cause 403 error)", value=False, key="enable_translation")
+        
+        # Add a slider for selecting the number of articles to translate
+        num_articles_to_translate = 1
+        if enable_translation:
+            num_articles_to_translate = st.slider(
+                label="Number of articles to translate (newest first)",
+                min_value=1,
+                max_value=max_articles,
+                value=1,
+                key="num_articles_to_translate"
+            )
+        
+        search_button = st.button("Search for News")
+        clear_button = st.button("Clear Results")
+        
+        st.header("Telegram Settings")
+        telegram_chat_id = st.text_input("Telegram Chat ID", value="5013104607", key="telegram_chat_id")
+        telegram_user_or_group_id = st.text_input("Send to User/Group", value="", key="telegram_user_or_group_id", help="Enter the @username or @groupname to send selected news to (leave blank to use default Chat ID)")
+        
+        bot_username = "YourBotUsername"
+        st.markdown(f"[Start a chat with the bot](https://t.me/{bot_username}) to allow sending messages.", unsafe_allow_html=True)
+        
+        if st.session_state.chat_ids:
+            st.subheader("Known Users/Groups")
+            for username, chat_id in st.session_state.chat_ids.items():
+                st.write(f"@{username}: {chat_id}")
+        
+        st.header("Download Options")
+        download_format = st.selectbox("Download Format", ["CSV", "JSON"], key="download_format")
+    
+    if clear_button:
+        st.session_state.articles = []
+        st.session_state.selected_articles = []
+        if os.path.exists(TEMP_FILE):
+            os.remove(TEMP_FILE)
+        st.experimental_rerun()
+
+    if search_button:
+        with st.spinner(f"Searching for news about {query} using {selected_api}..."):
+            logger.info(f"Search button clicked. Query: {query}, API: {selected_api}, Start Date: {start_date}, End Date: {end_date}, Max Articles: {max_articles}")
+            from_date = start_date.strftime("%Y-%m-%d")
+            to_date = end_date.strftime("%Y-%m-%d")
+            # Adjust query for CoinGecko if selected
+            fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
+            articles = fetch_news(selected_api, query=fetch_query, max_records=max_articles, from_date=from_date, to_date=to_date)
+            if articles:
+                logger.info(f"Before filtering: {len(articles)} articles")
+                filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
+                if not filtered_articles:
+                    if time_range_hours != float("inf"):
+                        st.warning(f"مقاله‌ای در {selected_time_range} گذشته پیدا نشد. لطفاً بازه زمانی را تغییر دهید یا فیلتر زمانی را غیرفعال کنید.")
+                    else:
+                        st.warning(f"No articles found within the selected date range ({start_date} to {end_date}). Try adjusting the date range or disabling the time filter.")
+                else:
+                    articles = filtered_articles
+                logger.info(f"After filtering: {len(articles)} articles")
+                articles = pre_process_articles(articles, st.session_state.avalai_api_url, enable_translation=enable_translation, num_articles_to_translate=num_articles_to_translate)
+                logger.info(f"After preprocessing: {len(articles)} articles")
+                st.session_state.articles = articles
+                save_articles_to_file(articles)
+                st.session_state.selected_articles = []
+                st.success("Articles fetched successfully!")
+            else:
+                st.warning(f"No articles fetched from {selected_api}. Check the error messages above or try a different query or API.")
+                logger.warning(f"No articles fetched after fetch_news call from {selected_api}.")
+    
+    if st.session_state.articles:
+        st.write(f"Found {len(st.session_state.articles)} articles in session state. Displaying now...")
+        display_news_articles(st.session_state.articles)
     else:
-        st.info("No data available to download.")
+        st.info("No articles to display in session state.")
+        logger.info("No articles to display in session state after search.")
 
-# Optional: Clear Fetched Items Button
-if st.session_state.fetched_items or st.session_state.selected_items:
-    if st.button("Clear All Fetched and Selected Items"):
-        st.session_state.fetched_items = []
-        st.session_state.selected_items = []
-        # Optional: Clear the temporary file
-        # if os.path.exists(TEMP_FILE):
-        #     os.remove(TEMP_FILE)
-        st.success("Cleared all fetched and selected items.")
-        st.rerun() # Rerun to update the UI
+    with st.sidebar:
+        st.header("Telegram Actions")
+        if st.button("Reset Selection"):
+            st.session_state.selected_articles = []
+            st.success("Selection reset successfully!")
+            logger.info("Selection reset by user.")
+        
+        if st.button("Send Selected News to Telegram", disabled=len(st.session_state.selected_articles) == 0):
+            with st.spinner("Sending to Telegram..."):
+                success_count = 0
+                fail_count = 0
+                target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
+                
+                if target_chat_id.startswith("@"):
+                    chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
+                    if chat_id is None:
+                        st.error(f"Failed to resolve username: {error}")
+                        fail_count = len(st.session_state.selected_articles)
+                    else:
+                        target_chat_id = chat_id
+                
+                st.info(f"Sending to Chat ID: {target_chat_id}")
+                logger.info(f"Sending {len(st.session_state.selected_articles)} articles to {target_chat_id}")
+                
+                for article in st.session_state.selected_articles:
+                    tehran_time = parse_to_tehran_time(article["published_at"])
+                    tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
+                    
+                    # Check if the article has been translated; if not, translate it
+                    final_title = article["translated_title"] or article["title"]
+                    final_description = article["translated_description"] or article["description"]
+                    
+                    if not final_title or final_title == article["title"]:
+                        final_title = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                        logger.info(f"Translated title for Telegram: {final_title}")
+                        article["translated_title"] = final_title  # Update the article with the new translation
+                    
+                    if not final_description or final_description == article["description"]:
+                        final_description = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                        logger.info(f"Translated description for Telegram: {final_description}")
+                        article["translated_description"] = final_description  # Update the article with the new translation
+                    
+                    truncated_description = truncate_text(final_description, max_length=100)
+                    
+                    # Extract content for Instant View
+                    article_content = extract_article_content(article["url"])
+                    # Translate the Instant View content
+                    translated_content = translate_with_avalai(article_content, source_lang="en", target_lang="fa", avalai_api_url=st.session_state.avalai_api_url)
+                    logger.info(f"Translated Instant View content (length: {len(translated_content)}): {translated_content}")
+                    
+                    # Construct the message with the new order: Title -> Description -> Time -> Instant View -> Link
+                    message = (
+                        f"*{final_title}*\n\n"
+                        f"{truncated_description}\n\n"
+                        f"**زمان انتشار:** {tehran_time_str}\n\n"
+                        f"**پیش‌نمایش مقاله (Instant View):**\n{translated_content}\n\n"
+                        f"[ادامه مطلب]({article['url']})"
+                    )
+                    logger.info(f"Sending message (length: {len(message)}): {message}")
+                    success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=False)
+                    if success:
+                        success_count += 1
+                    else:
+                        fail_count += 1
+                        st.error(f"Failed to send to {target_chat_id}: {article['title']} - {result}")
+                    time.sleep(1)
+                if success_count > 0:
+                    st.success(f"Successfully sent {success_count} article(s) to Telegram")
+                if fail_count > 0:
+                    st.warning(f"Failed to send {fail_count} article(s) to Telegram")
+        else:
+            st.info(f"Select {len(st.session_state.selected_articles)} article(s) to send to Telegram")
+            logger.info(f"No articles selected for sending. Current count: {len(st.session_state.selected_articles)}")
 
+    if st.session_state.articles:
+        with st.sidebar:
+            st.header("Download Options")
+            if download_format == "CSV":
+                csv_data = save_articles_to_file_for_download(st.session_state.articles, format="csv")
+                st.download_button(
+                    label="Download as CSV",
+                    data=csv_data if csv_data else b"",
+                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+            else:
+                json_data = save_articles_to_file_for_download(st.session_state.articles, format="json")
+                st.download_button(
+                    label="Download as JSON",
+                    data=json_data if json_data else b"",
+                    file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json",
+                    mime="application/json"
+                )
 
-# Optional: Info about the app
-st.markdown("---")
-st.info("This app aggregates news and financial reports using various APIs. News articles can be translated to Persian and sent to a specified Telegram chat.")
-
-st.markdown("Developed by [Your Name/Contact Info or GitHub Link]") # Replace with actual info
+if __name__ == "__main__":
+    main()
