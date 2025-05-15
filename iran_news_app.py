@@ -9,18 +9,14 @@ from io import BytesIO
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import smtplib
-from email.mime.text import MIMEText
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration - API keys and email settings are fetched from environment variables
+# Configuration - API keys are fetched from environment variables
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
-NEWSAPI_URL = "https://newsapi.org/v2/everything"
-NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "YOUR_NEWSAPI_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
 AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
@@ -28,13 +24,6 @@ AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
-
-# Email configuration
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
-EMAIL_USER = os.environ.get("EMAIL_USER", "your-email@gmail.com")
-EMAIL_PASS = os.environ.get("EMAIL_PASS", "")
-EMAIL_TO = os.environ.get("EMAIL_TO", "avestaparsavic@gmail.com")
 
 # Temporary file to store articles and chat IDs
 TEMP_FILE = "/tmp/iran_news_articles.json"
@@ -89,21 +78,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Function to send error email
+# Function to send error email (disabled as per user request)
 def send_error_email(error_message):
-    msg = MIMEText(error_message)
-    msg['Subject'] = 'Error in Iran News Aggregator'
-    msg['From'] = EMAIL_USER
-    msg['To'] = EMAIL_TO
-
-    try:
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASS)
-            server.send_message(msg)
-        logger.info(f"Error email sent to {EMAIL_TO}")
-    except Exception as e:
-        logger.error(f"Failed to send error email: {str(e)}")
+    # Email sending is disabled as per user request
+    logger.info(f"Error email sending is disabled. Error message: {error_message}")
 
 # Load articles from temp file if exists
 def load_articles_from_file():
@@ -209,68 +187,6 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         send_error_email(error_msg)
         return [], error_msg
 
-# Fetch news from NewsAPI
-def fetch_newsapi(query="Iran", max_records=20, from_date=None, to_date=None):
-    """
-    Fetch news articles from NewsAPI
-    """
-    if not NEWSAPI_KEY or NEWSAPI_KEY == "YOUR_NEWSAPI_KEY":
-        error_msg = "Invalid NewsAPI key. Please set a valid API key in Render environment variables."
-        logger.error(error_msg)
-        send_error_email(error_msg)
-        return [], error_msg
-    
-    params = {
-        "q": query,
-        "apiKey": NEWSAPI_KEY,
-        "language": "en",
-        "from": from_date,
-        "to": to_date,
-        "pageSize": min(max_records, 100),
-        "sortBy": "publishedAt"
-    }
-    headers = {
-        "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
-    }
-    logger.info(f"Sending NewsAPI request with params: {params}")
-    
-    try:
-        response = requests.get(NEWSAPI_URL, params=params, headers=headers, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-        logger.info(f"NewsAPI response: {data}")
-        
-        if data.get("status") != "ok":
-            error_msg = f"NewsAPI error: {data.get('message', 'Unknown error')}"
-            logger.error(error_msg)
-            send_error_email(error_msg)
-            return [], error_msg
-            
-        articles = data.get("articles", [])
-        if not articles:
-            error_msg = f"No articles found for query '{query}' in NewsAPI."
-            logger.warning(error_msg)
-            return [], error_msg
-            
-        return [
-            {
-                "title": a.get("title", "No title"),
-                "url": a.get("url", ""),
-                "source": a.get("source", {}).get("name", "Unknown Source"),
-                "published_at": a.get("publishedAt", ""),
-                "description": a.get("description", "") or "No description available",
-                "image_url": a.get("urlToImage", ""),
-                "translated_title": "",
-                "translated_description": ""
-            }
-            for a in articles
-        ], None
-    except Exception as e:
-        error_msg = f"Error fetching NewsAPI: {str(e)}"
-        logger.error(error_msg)
-        send_error_email(error_msg)
-        return [], error_msg
-
 # Fetch news from World News API
 def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     """
@@ -342,14 +258,13 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
     st.write("Starting news fetch process (parallel)...")
     fetch_functions = [
         (fetch_gnews, "GNews"),
-        (fetch_newsapi, "NewsAPI"),
         (fetch_worldnews, "World News API")
     ]
     
     all_articles = []
     errors = []
     
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    with ThreadPoolExecutor(max_workers=2) as executor:
         future_to_api = {
             executor.submit(func, query, max_records, from_date, to_date): name
             for func, name in fetch_functions
@@ -360,6 +275,7 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
             try:
                 articles, error = future.result()
                 st.write(f"Fetched {len(articles)} articles from {api_name}")
+                logger.info(f"Fetched {len(articles)} articles from {api_name}")
                 if articles:
                     all_articles.extend(articles)
                 if error:
@@ -377,6 +293,10 @@ def fetch_news(query="Iran", max_records=20, from_date=None, to_date=None):
         if article["url"] not in seen_urls:
             seen_urls.add(article["url"])
             unique_articles.append(article)
+    
+    # Limit the total number of articles to max_records
+    unique_articles = unique_articles[:max_records]
+    logger.info(f"After removing duplicates and limiting: {len(unique_articles)} articles")
     
     for error in errors:
         st.error(error)
@@ -411,7 +331,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     payload = {
-        "model": "gpt-4.1-nano",  # Changed to gpt-4.1-nano as requested
+        "model": "gpt-4.1-nano",
         "messages": [
             {
                 "role": "user",
@@ -525,31 +445,47 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
     return filtered_articles
 
 # Function to pre-process articles (translations only)
-def pre_process_articles(articles, avalai_api_url, enable_translation=False):
+def pre_process_articles(articles, avalai_api_url, enable_translation=False, num_articles_to_translate=1):
     """
-    Pre-process articles by translating with Avalai
+    Pre-process articles by translating with Avalai, only for the specified number of newest articles
     """
-    for i, article in enumerate(articles):
+    if not articles:
+        return articles
+    
+    # Sort articles by publication time (newest first)
+    sorted_articles = sorted(
+        articles,
+        key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
+        reverse=True
+    )
+    logger.info(f"Sorted {len(sorted_articles)} articles for translation processing")
+    
+    for i, article in enumerate(sorted_articles):
         try:
-            if enable_translation:
+            # Only translate the specified number of newest articles
+            if enable_translation and i < num_articles_to_translate:
+                logger.info(f"Translating article {i+1}: {article['title']}")
                 article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
                 article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
             else:
                 article["translated_title"] = article["title"]
                 article["translated_description"] = article["description"]
+                if enable_translation and i >= num_articles_to_translate:
+                    logger.info(f"Skipping translation for article {i+1}: {article['title']} (beyond limit of {num_articles_to_translate})")
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
             send_error_email(f"Error in pre_process_articles: {str(e)} - Article: {article['title']}")
-    return articles
+    return sorted_articles
 
 # Function to display news articles in a nice format
 def display_news_articles(articles):
     """Display news articles in a structured format"""
     st.write(f"Attempting to display {len(articles)} articles...")
     logger.info(f"Displaying {len(articles)} articles: {articles}")
+    
     if not articles:
-        st.warning("No news articles to display")
+        st.warning("No news articles to display. This might be due to filtering or no articles being fetched.")
         return
     
     sorted_articles = sorted(
@@ -557,6 +493,7 @@ def display_news_articles(articles):
         key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
         reverse=True
     )
+    logger.info(f"Sorted articles: {len(sorted_articles)} articles after sorting")
     
     st.subheader("News Statistics")
     sources = pd.DataFrame([article["source"] for article in sorted_articles]).value_counts().reset_index()
@@ -577,6 +514,8 @@ def display_news_articles(articles):
     st.subheader("News Articles")
     for i, article in enumerate(sorted_articles):
         st.write(f"Displaying article {i+1}: {article['title']}")
+        logger.info(f"Rendering article {i+1}: {article['title']}")
+        
         is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
         checkbox_key = f"article_{i}"
         if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
@@ -729,6 +668,17 @@ def main():
         
         enable_translation = st.checkbox("Enable Translation (May cause 403 error)", value=False, key="enable_translation")
         
+        # Add a slider for selecting the number of articles to translate
+        num_articles_to_translate = 1
+        if enable_translation:
+            num_articles_to_translate = st.slider(
+                label="Number of articles to translate (newest first)",
+                min_value=1,
+                max_value=max_articles,
+                value=1,
+                key="num_articles_to_translate"
+            )
+        
         search_button = st.button("Search for News")
         clear_button = st.button("Clear Results")
         
@@ -760,12 +710,15 @@ def main():
             to_date = end_date.strftime("%Y-%m-%d")
             articles = fetch_news(query=query, max_records=max_articles, from_date=from_date, to_date=to_date)
             if articles:
+                logger.info(f"Before filtering: {len(articles)} articles")
                 filtered_articles = filter_articles_by_time(articles, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
                 if not filtered_articles:
-                    st.warning(f"No articles found within the selected range ({selected_time_range}). Try a larger time range, adjust the date, or disable the time filter.")
+                    st.warning(f"No articles found within the selected date range ({start_date} to {end_date}). Try adjusting the date range or disabling the time filter.")
                 else:
                     articles = filtered_articles
-                articles = pre_process_articles(articles, st.session_state.avalai_api_url, enable_translation=enable_translation)
+                logger.info(f"After filtering: {len(articles)} articles")
+                articles = pre_process_articles(articles, st.session_state.avalai_api_url, enable_translation=enable_translation, num_articles_to_translate=num_articles_to_translate)
+                logger.info(f"After preprocessing: {len(articles)} articles")
                 st.session_state.articles = articles
                 save_articles_to_file(articles)
                 st.session_state.selected_articles = []
