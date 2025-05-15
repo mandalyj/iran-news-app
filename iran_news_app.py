@@ -741,8 +741,8 @@ def extract_article_content(url):
 
 # Function to filter items by time range (for news only)
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
-    if not items:
-        logger.info("No items to filter")
+    if not items or not isinstance(items, list):
+        logger.info("No items or invalid items to filter")
         return []
     
     if items and items[0].get("type") == "report":
@@ -791,9 +791,9 @@ def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=N
 
 # Function to pre-process articles (translations only, skip for reports)
 def pre_process_articles(items, avalai_api_url, enable_translation=False, num_items_to_translate=1):
-    if not items:
-        logger.info("No items to preprocess")
-        return items
+    if not items or not isinstance(items, list):
+        logger.info("No items or invalid items to preprocess")
+        return []
     
     if items and items[0].get("type") == "report":
         logger.info("Skipping translation for financial reports")
@@ -843,15 +843,15 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
 # Function to display items (news or reports) in a nice format
 def display_items(items):
     try:
+        if not items or not isinstance(items, list):
+            st.warning("No items to display or invalid items format.")
+            logger.warning("No items or invalid items format to display")
+            return
+        
         st.write(f"Attempting to display {len(items)} items...")
         logger.info(f"Displaying {len(items)} items: {items}")
         
-        if not items:
-            st.warning("No items to display. This might be due to filtering or no items being fetched.")
-            logger.warning("No items to display")
-            return
-        
-        item_type = items[0].get("type", "news")
+        item_type = items[0].get("type", "news") if items else "news"
         
         if item_type == "news":
             sorted_items = sorted(
@@ -937,8 +937,8 @@ def display_items(items):
 # Function to save items to a file for download
 def save_items_to_file_for_download(items, format="csv"):
     try:
-        if not items:
-            logger.info("No items to save for download")
+        if not items or not isinstance(items, list):
+            logger.info("No items or invalid items to save for download")
             return None
         df = pd.DataFrame(items)
         if format == "csv":
@@ -1040,7 +1040,7 @@ def main():
         
         if 'selected_items' not in st.session_state:
             st.session_state.selected_items = []
-        if 'items' not in st.session_state:
+        if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
             st.session_state.items = load_articles_from_file()
         if 'chat_ids' not in st.session_state:
             st.session_state.chat_ids = load_chat_ids()
@@ -1138,7 +1138,7 @@ def main():
                 to_date = end_date.strftime("%Y-%m-%d")
                 fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
                 items = fetch_news(selected_api, query=fetch_query, max_records=max_items, from_date=from_date, to_date=to_date)
-                if items:
+                if items and isinstance(items, list):
                     logger.info(f"Before filtering: {len(items)} items")
                     filtered_items = filter_articles_by_time(items, time_range_hours, start_date, end_date, disable_filter=disable_time_filter)
                     if not filtered_items and selected_api != "Financial Report (FMP)":
@@ -1159,7 +1159,7 @@ def main():
                     st.warning(f"No items fetched from {selected_api}. Check the error messages above or try a different query or API.")
                     logger.warning(f"No items fetched after fetch_news call from {selected_api}.")
         
-        if st.session_state.items:
+        if st.session_state.items and isinstance(st.session_state.items, list):
             st.write(f"Found {len(st.session_state.items)} items in session state. Displaying now...")
             display_items(st.session_state.items)
         else:
@@ -1253,7 +1253,7 @@ def main():
                 st.info(f"Select {len(st.session_state.selected_items)} item(s) to send to Telegram")
                 logger.info(f"No items selected for sending. Current count: {len(st.session_state.selected_items)}")
 
-        if st.session_state.items:
+        if st.session_state.items and isinstance(st.session_state.items, list):
             with st.sidebar:
                 st.header("Download Options")
                 if download_format == "CSV":
