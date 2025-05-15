@@ -55,7 +55,7 @@ st.markdown(
         direction: rtl;
         text-align: right;
         font-family: "B Nazanin", "Arial Unicode MS", "Tahoma", sans-serif;
-        font-size: 18px !important;
+        font-size: 16px !important;
     }
     .english-text {
         direction: ltr;
@@ -63,11 +63,26 @@ st.markdown(
         font-size: 14px !important;
     }
     .article-section {
-        margin-bottom: 20px;
+        margin-bottom: 30px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
     }
     .title-link {
-        font-size: 17px !important;
+        font-size: 18px !important;
         font-weight: bold !important;
+        color: #1a73e8 !important;
+        margin-bottom: 10px !important;
+    }
+    .source-date {
+        font-size: 14px !important;
+        color: #555 !important;
+        margin-bottom: 10px !important;
+    }
+    .description {
+        margin-top: 10px !important;
+        line-height: 1.5 !important;
     }
     </style>
     """,
@@ -396,7 +411,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "User-Agent": f"IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
     payload = {
-        "model": "gpt-4o",
+        "model": "gpt-4.1-nano",  # Changed to gpt-4.1-nano as requested
         "messages": [
             {
                 "role": "user",
@@ -431,18 +446,28 @@ def parse_to_tehran_time(utc_time_str):
     """
     Convert UTC time string to Tehran time (UTC+3:30) and return as datetime object
     """
-    try:
-        if 'T' in utc_time_str:
-            utc_time = datetime.strptime(utc_time_str, "%Y-%m-%dT%H:%M:%SZ")
-        else:
-            utc_time = datetime.strptime(utc_time_str, "%Y-%m-%d %H:%M:%S")
-        tehran_time = utc_time + timedelta(hours=3, minutes=30)
-        return tehran_time
-    except Exception as e:
-        error_msg = f"Error converting time: {str(e)} - Input: {utc_time_str}"
-        logger.warning(error_msg)
-        send_error_email(error_msg)
+    if not utc_time_str:
+        logger.warning("Empty time string provided")
         return None
+    
+    time_formats = [
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+    ]
+    
+    for time_format in time_formats:
+        try:
+            utc_time = datetime.strptime(utc_time_str, time_format)
+            tehran_time = utc_time + timedelta(hours=3, minutes=30)
+            return tehran_time
+        except ValueError:
+            continue
+    
+    error_msg = f"Error converting time: Invalid format - Input: {utc_time_str}"
+    logger.warning(error_msg)
+    send_error_email(error_msg)
+    return None
 
 # Function to format Tehran time for display
 def format_tehran_time(tehran_time):
@@ -451,11 +476,19 @@ def format_tehran_time(tehran_time):
     """
     return tehran_time.strftime("%Y/%m/%d - %H:%M")
 
+# Function to truncate text to a specified length
+def truncate_text(text, max_length=100):
+    """
+    Truncate text to a specified length and add ellipsis if necessary
+    """
+    if len(text) > max_length:
+        return text[:max_length].rsplit(" ", 1)[0] + "..."
+    return text
+
 # Function to filter articles by time range
 def filter_articles_by_time(articles, time_range_hours, start_date=None, end_date=None, disable_filter=False):
     """
     Filter articles based on the selected time range or date range
-    - If disable_filter is True, return all articles without filtering
     """
     if not articles:
         return []
@@ -495,7 +528,6 @@ def filter_articles_by_time(articles, time_range_hours, start_date=None, end_dat
 def pre_process_articles(articles, avalai_api_url, enable_translation=False):
     """
     Pre-process articles by translating with Avalai
-    - If enable_translation is False, skip translation
     """
     for i, article in enumerate(articles):
         try:
@@ -503,8 +535,8 @@ def pre_process_articles(articles, avalai_api_url, enable_translation=False):
                 article["translated_title"] = translate_with_avalai(article["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
                 article["translated_description"] = translate_with_avalai(article["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
             else:
-                article["translated_title"] = article["title"]  # Use original title
-                article["translated_description"] = article["description"]  # Use original description
+                article["translated_title"] = article["title"]
+                article["translated_description"] = article["description"]
         except Exception as e:
             st.error(f"Error processing article {article['title']}: {str(e)}")
             logger.error(f"Error in pre_process_articles: {str(e)}")
@@ -519,9 +551,15 @@ def display_news_articles(articles):
     if not articles:
         st.warning("No news articles to display")
         return
-        
+    
+    sorted_articles = sorted(
+        articles,
+        key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min,
+        reverse=True
+    )
+    
     st.subheader("News Statistics")
-    sources = pd.DataFrame([article["source"] for article in articles]).value_counts().reset_index()
+    sources = pd.DataFrame([article["source"] for article in sorted_articles]).value_counts().reset_index()
     sources.columns = ["Source", "Count"]
     if len(sources) > 1:
         col1, col2 = st.columns(2)
@@ -537,61 +575,33 @@ def display_news_articles(articles):
     st.write(f"You have selected {selected_count} article(s) to send to Telegram")
     
     st.subheader("News Articles")
-    for i in range(0, len(articles), 2):
-        cols = st.columns(2)
-        with cols[0]:
-            article = articles[i]
-            st.write(f"Displaying article {i+1}: {article['title']}")
-            is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
-            checkbox_key = f"article_{i}"
-            if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-                if not is_selected:
-                    st.session_state.selected_articles.append(article)
-            else:
-                if is_selected:
-                    st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-            tehran_time = parse_to_tehran_time(article["published_at"])
-            tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
-            st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-            st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
-            st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
-            st.markdown(f'**Source:** {article["source"]}')
-            st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-            if article["image_url"]:
-                try:
-                    st.image(article["image_url"], use_column_width=True)
-                except:
-                    st.info("Image could not be loaded")
-            st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
-            st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + article["translated_description"] + '</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        if i + 1 < len(articles):
-            with cols[1]:
-                article = articles[i + 1]
-                st.write(f"Displaying article {i+2}: {article['title']}")
-                is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
-                checkbox_key = f"article_{i+1}"
-                if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
-                    if not is_selected:
-                        st.session_state.selected_articles.append(article)
-                else:
-                    if is_selected:
-                        st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
-                tehran_time = parse_to_tehran_time(article["published_at"])
-                tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
-                st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-                st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
-                st.markdown('<div class="persian-text">**عنوان (فارسی):** ' + article["translated_title"] + '</div>', unsafe_allow_html=True)
-                st.markdown(f'**Source:** {article["source"]}')
-                st.markdown(f'<div class="persian-text">**انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
-                if article["image_url"]:
-                    try:
-                        st.image(article["image_url"], use_column_width=True)
-                    except:
-                        st.info("Image could not be loaded")
-                st.markdown('<div class="english-text">**Description (English):** ' + article["description"] + '</div>', unsafe_allow_html=True)
-                st.markdown('<div class="persian-text">**توضیحات (فارسی):** ' + article["translated_description"] + '</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+    for i, article in enumerate(sorted_articles):
+        st.write(f"Displaying article {i+1}: {article['title']}")
+        is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
+        checkbox_key = f"article_{i}"
+        if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
+            if not is_selected:
+                st.session_state.selected_articles.append(article)
+        else:
+            if is_selected:
+                st.session_state.selected_articles = [a for a in st.session_state.selected_articles if a.get('url') != article['url']]
+        
+        tehran_time = parse_to_tehran_time(article["published_at"])
+        tehran_time_str = format_tehran_time(tehran_time) if tehran_time else article["published_at"]
+        truncated_description = truncate_text(article["description"], max_length=100)
+        truncated_translated_description = truncate_text(article["translated_description"], max_length=100)
+        
+        st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
+        st.markdown(f'<h3 class="title-link"><a href="{article["url"]}" target="_blank">{article["title"]}</a></h3>', unsafe_allow_html=True)
+        st.markdown(f'<div class="source-date">**Source:** {article["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
+        if article["image_url"]:
+            try:
+                st.image(article["image_url"], width=300)
+            except:
+                st.info("Image could not be loaded")
+        st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # Function to save articles to a file for download
 def save_articles_to_file_for_download(articles, format="csv"):
@@ -706,7 +716,6 @@ def main():
         selected_time_range = st.selectbox("Time Range", options=list(time_range_options.keys()), index=4, key="time_range")
         time_range_hours = time_range_options[selected_time_range]
         
-        # Add option to disable time filter
         disable_time_filter = st.checkbox("Disable Time Filter (Show All Articles)", value=False, key="disable_time_filter")
         
         st.header("Translation Settings")
@@ -718,7 +727,6 @@ def main():
             help="Choose the Avalai API URL. Use https://api.avalai.ir/v1 for global access, or https://api.avalapis.ir/v1 for better performance inside Iran (only accessible from Iran)."
         )
         
-        # Add option to enable/disable translation
         enable_translation = st.checkbox("Enable Translation (May cause 403 error)", value=False, key="enable_translation")
         
         search_button = st.button("Search for News")
