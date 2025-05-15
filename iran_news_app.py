@@ -66,7 +66,7 @@ st.markdown(
         font-size: 18px !important;
         font-weight: bold !important;
         color: #1a73e8 !important;
-        margin-bottom: 10px !important;
+        margin-bottom: 2px !important; /* Reduced margin to bring checkbox closer */
     }
     .source-date {
         font-size: 14px !important;
@@ -345,7 +345,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
     }
     
     try:
-        logger.info(f"Sending translation request to Avalai: {payload}")
+        logger.info(f"Sending translation request to Avalai: {*payload}")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
@@ -532,9 +532,8 @@ def display_news_articles(articles):
         current_col = col1 if i % 2 == 0 else col2
         
         with current_col:
-            # Neon line above the "Displaying article" text
+            # Neon line above the article title
             st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
-            st.write(f"Displaying article {i+1}: {article['title']}")
             logger.info(f"Rendering article {i+1}: {article['title']}")
             
             is_selected = any(a.get('url') == article['url'] for a in st.session_state.selected_articles)
