@@ -30,7 +30,8 @@ GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
-COINGECKO_API_URL = "https://api.coingecko.com/api/v3"
+CRYPTOCOMPARE_API_URL = "https://min-api.cryptocompare.com/data/v2/news/"
+CRYPTOCOMPARE_API_KEY = os.environ.get("CRYPTOCOMPARE_API_KEY", "YOUR_CRYPTOCOMPARE_API_KEY")
 FMP_API_URL = "https://financialmodelingprep.com/api/v3"
 FMP_API_KEY = os.environ.get("FMP_API_KEY", "YOUR_FMP_API_KEY")
 AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
@@ -195,56 +196,64 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         st.error(f"Error fetching from World News API: {str(e)}")
         return [], str(e)
 
-def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
-    endpoint = f"{COINGECKO_API_URL}/news"
+def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
+    if CRYPTOCOMPARE_API_KEY == "YOUR_CRYPTOCOMPARE_API_KEY":
+        logger.error("CryptoCompare API key is invalid")
+        st.error("CryptoCompare API key is invalid")
+        return [], "Invalid API key"
+    
+    endpoint = CRYPTOCOMPARE_API_URL
     headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
-    params = {"limit": min(max_records, 100)}
-    retries = 3
-    delay = 5
-    for attempt in range(retries):
-        try:
-            time.sleep(delay)
-            logger.info(f"Sending request to CoinGecko with params: {params}")
-            response = requests.get(endpoint, params=params, headers=headers, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"CoinGecko response: {data}")
-            articles = data.get("data", [])
-            if not articles:
-                logger.warning(f"No articles found for '{query}' on CoinGecko")
-                st.warning(f"No articles found for '{query}' on CoinGecko")
-                return [], "No articles found"
-            formatted_articles = []
-            for a in articles:
-                published_at = a.get("published_at", "")
-                if from_date and to_date:
-                    article_date = parse_to_tehran_time(published_at)
-                    if not article_date:
-                        continue
-                    start_datetime = datetime.strptime(from_date, "%Y-%m-%d")
-                    end_datetime = datetime.strptime(to_date, "%Y-%m-%d")
-                    if not (start_datetime <= article_date <= end_datetime):
-                        continue
-                formatted_articles.append({
-                    "title": a.get("title", "No title"), "url": a.get("url", ""),
-                    "source": a.get("source", "CoinGecko"), "published_at": published_at,
-                    "description": a.get("description", "") or "No description", "image_url": a.get("thumb", ""),
-                    "translated_title": "", "translated_description": "", "type": "news"
-                })
-            logger.info(f"Fetched {len(formatted_articles)} articles from CoinGecko: {formatted_articles}")
-            return formatted_articles, None
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429 and attempt < retries - 1:
-                logger.warning(f"Rate limit exceeded, retrying after {delay} seconds...")
-                delay *= 2
-                continue
-            logger.error(f"Error fetching from CoinGecko: {str(e)}")
-            st.error(f"Error fetching from CoinGecko: {str(e)}")
-            return [], str(e)
-        except Exception as e:
-            logger.error(f"Error fetching from CoinGecko: {str(e)}")
-            st.error(f"Error fetching from CoinGecko: {str(e)}")
-            return [], str(e)
+    params = {
+        "lang": "EN",
+        "api_key": CRYPTOCOMPARE_API_KEY,
+        "feeds": "cryptocompare",  # You can add more feeds if needed
+        "lTs": int(datetime.strptime(to_date, "%Y-%m-%d").timestamp()) if to_date else None
+    }
+    try:
+        logger.info(f"Sending request to CryptoCompare with params: {params}")
+        response = requests.get(endpoint, params=params, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"CryptoCompare response: {data}")
+        if data.get("Response") == "Error":
+            logger.error(f"CryptoCompare API error: {data.get('Message')}")
+            st.error(f"CryptoCompare API error: {data.get('Message')}")
+            return [], data.get('Message')
+        articles = data.get("Data", [])
+        if not articles:
+            logger.warning(f"No articles found for '{query}' on CryptoCompare")
+            st.warning(f"No articles found for '{query}' on CryptoCompare")
+            return [], "No articles found"
+        formatted_articles = []
+        for a in articles:
+            published_at = datetime.fromtimestamp(a.get("published_on", 0)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if from_date and to_date:
+                article_date = parse_to_tehran_time(published_at)
+                if not article_date:
+                    continue
+                start_datetime = datetime.strptime(from_date, "%Y-%m-%d")
+                end_datetime = datetime.strptime(to_date, "%Y-%m-%d")
+                if not (start_datetime <= article_date <= end_datetime):
+                    continue
+            formatted_articles.append({
+                "title": a.get("title", "No title"),
+                "url": a.get("url", ""),
+                "source": a.get("source", "CryptoCompare"),
+                "published_at": published_at,
+                "description": a.get("body", "") or "No description",
+                "image_url": a.get("imageurl", ""),
+                "translated_title": "",
+                "translated_description": "",
+                "type": "news"
+            })
+        formatted_articles = formatted_articles[:max_records]
+        logger.info(f"Fetched {len(formatted_articles)} articles from CryptoCompare: {formatted_articles}")
+        return formatted_articles, None
+    except Exception as e:
+        logger.error(f"Error fetching from CryptoCompare: {str(e)}")
+        st.error(f"Error fetching from CryptoCompare: {str(e)}")
+        return [], str(e)
 
 def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
     if FMP_API_KEY == "YOUR_FMP_API_KEY":
@@ -341,8 +350,10 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
     try:
         logger.info(f"Fetching from {selected_api}: query={query}, max_records={max_records}, from_date={from_date}, to_date={to_date}")
         api_functions = {
-            "GNews": fetch_gnews, "World News API": fetch_worldnews,
-            "CoinGecko (Crypto News)": fetch_coingecko_news, "Financial Report (FMP)": fetch_financial_report,
+            "GNews": fetch_gnews,
+            "World News API": fetch_worldnews,
+            "CryptoCompare (Crypto News)": fetch_cryptocompare_news,  # Updated to CryptoCompare
+            "Financial Report (FMP)": fetch_financial_report,
             "CurrentsAPI": fetch_currentsapi_news
         }
         fetch_function = api_functions.get(selected_api)
@@ -713,7 +724,7 @@ def main():
             start_date = st.date_input("Start date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today)
             end_date = st.date_input("End date", value=today, min_value=start_date, max_value=today)
             max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=20)
-            api_options = ["GNews", "World News API", "CoinGecko (Crypto News)", "Financial Report (FMP)", "CurrentsAPI"]
+            api_options = ["GNews", "World News API", "CryptoCompare (Crypto News)", "Financial Report (FMP)", "CurrentsAPI"]
             selected_api = st.selectbox("Select API", options=api_options, index=0)
             time_range_options = {
                 "Last 30 minutes": 0.5, "Last 1 hour": 1, "Last 4 hours": 4,
@@ -756,7 +767,7 @@ def main():
             with st.spinner(f"Searching using {selected_api}..."):
                 from_date = start_date.strftime("%Y-%m-%d")
                 to_date = end_date.strftime("%Y-%m-%d")
-                fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
+                fetch_query = "cryptocurrency" if selected_api == "CryptoCompare (Crypto News)" else query
                 items = fetch_news(selected_api, query=fetch_query, max_records=max_items, from_date=from_date, to_date=to_date)
                 logger.info(f"After fetch_news, number of items: {len(items)}, items: {items}")
                 if items:
@@ -835,7 +846,7 @@ def main():
                                     f"**Earnings Per Share (EPS):** {item['eps']}\n"
                                     f"**Gross Profit:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
                                     f"**Operating Income:** {item['operatingIncome']:,} {item['reportedCurrency']}"
-        )
+                                )
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=(item.get("type") != "news"))
                             if success:
                                 success_count += 1
