@@ -169,14 +169,12 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
         for a in articles:
             title = a.get("title", "No title")
             description = a.get("description", "") or "No description"
-            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
             formatted_articles.append({
                 "title": title, "url": a.get("url", ""),
                 "source": a.get("source", {}).get("name", "Unknown source"),
                 "published_at": a.get("publishedAt", ""), "description": description,
-                "image_url": a.get("image", ""), "translated_title": translated_title,
-                "translated_description": translated_description, "type": "news"
+                "image_url": a.get("image", ""), "translated_title": title,
+                "translated_description": description, "type": "news"
             })
         logger.info(f"Fetched {len(formatted_articles)} articles from GNews: {formatted_articles}")
         return formatted_articles, None
@@ -216,13 +214,11 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
         for a in articles:
             title = a.get("title", "No title")
             description = a.get("text", "") or "No description"
-            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
             formatted_articles.append({
                 "title": title, "url": a.get("url", ""),
                 "source": a.get("source", "Unknown source"), "published_at": a.get("publish_date", ""),
                 "description": description, "image_url": a.get("image", ""),
-                "translated_title": translated_title, "translated_description": translated_description,
+                "translated_title": title, "translated_description": description,
                 "type": "news"
             })
         logger.info(f"Fetched {len(formatted_articles)} articles from World News API: {formatted_articles}")
@@ -270,18 +266,12 @@ def fetch_newsapi_crypto_news(query="cryptocurrency", max_records=20, from_date=
         for a in articles:
             title = a.get("title", "No title")
             description = a.get("description", "") or "No description"
-            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
             formatted_articles.append({
-                "title": title,
-                "url": a.get("url", ""),
+                "title": title, "url": a.get("url", ""),
                 "source": a.get("source", {}).get("name", "Unknown source"),
-                "published_at": a.get("publishedAt", ""),
-                "description": description,
-                "image_url": a.get("urlToImage", ""),
-                "translated_title": translated_title,
-                "translated_description": translated_description,
-                "type": "news"
+                "published_at": a.get("publishedAt", ""), "description": description,
+                "image_url": a.get("urlToImage", ""), "translated_title": title,
+                "translated_description": description, "type": "news"
             })
         logger.info(f"Fetched {len(formatted_articles)} articles from NewsAPI: {formatted_articles}")
         return formatted_articles, None
@@ -322,17 +312,12 @@ def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=N
         for a in articles:
             title = a.get("title", "No title")
             description = a.get("body", "") or "No description"
-            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
             formatted_articles.append({
-                "title": title,
-                "url": a.get("url", ""),
+                "title": title, "url": a.get("url", ""),
                 "source": a.get("source", "CryptoCompare"),
                 "published_at": datetime.fromtimestamp(a.get("published_on", 0)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "description": description,
-                "image_url": a.get("imageurl", ""),
-                "translated_title": translated_title,
-                "translated_description": translated_description,
+                "description": description, "image_url": a.get("imageurl", ""),
+                "translated_title": title, "translated_description": description,
                 "type": "report"
             })
         formatted_articles = formatted_articles[:max_records]
@@ -423,14 +408,12 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
         for article in news:
             title = article.get("title", "No title")
             description = article.get("description", "") or "No description"
-            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
             formatted_articles.append({
                 "title": title, "url": article.get("url", ""),
                 "source": article.get("source", {}).get("name", "Unknown source"),
                 "published_at": article.get("published", ""), "description": description,
-                "image_url": article.get("image", ""), "translated_title": translated_title,
-                "translated_description": translated_description, "type": "news"
+                "image_url": article.get("image", ""), "translated_title": title,
+                "translated_description": description, "type": "news"
             })
         logger.info(f"Fetched {len(formatted_articles)} articles from CurrentsAPI: {formatted_articles}")
         return formatted_articles, None
@@ -457,20 +440,14 @@ def fetch_custom_scraped_news(max_records=20):
                 for entry in feed.entries[:max_records]:
                     title = entry.get("title", "No title")
                     description = entry.get("summary", "") or entry.get("description", "") or "No description"
-                    translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-                    translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
                     news_items.append({
-                        "title": title,
-                        "url": entry.get("link", ""),
+                        "title": title, "url": entry.get("link", ""),
                         "published_at": entry.get("published", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")),
-                        "description": description,
-                        "image_url": entry.get("media_thumbnail", [{}])[0].get("url", ""),
-                        "translated_title": translated_title,
-                        "translated_description": translated_description,
-                        "source": source["name"],
-                        "type": "news"
+                        "description": description, "image_url": entry.get("media_thumbnail", [{}])[0].get("url", ""),
+                        "translated_title": title, "translated_description": description,
+                        "source": source["name"], "type": "news"
                     })
-                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')} (Translated: {translated_title})")
+                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')}")
             elif source["type"] == "web":
                 logger.info(f"Attempting to scrape web content from {source['url']}")
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -496,20 +473,14 @@ def fetch_custom_scraped_news(max_records=20):
                     )
                     image_elem = article.find("img", src=True)
                     image_url = image_elem["src"] if image_elem else ""
-                    translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
-                    translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
                     news_items.append({
-                        "title": title,
-                        "url": article_url,
+                        "title": title, "url": article_url,
                         "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "description": description,
-                        "image_url": image_url,
-                        "translated_title": translated_title,
-                        "translated_description": translated_description,
-                        "source": source["name"],
-                        "type": "news"
+                        "description": description, "image_url": image_url,
+                        "translated_title": title, "translated_description": description,
+                        "source": source["name"], "type": "news"
                     })
-                    logger.info(f"Successfully scraped article: {title} (Translated: {translated_title})")
+                    logger.info(f"Successfully scraped article: {title}")
         except Exception as e:
             logger.error(f"Error scraping {source['name']} ({source['url']}): {str(e)}")
     return news_items[:max_records]
@@ -693,8 +664,8 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
         sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
         logger.info(f"Sorted articles: {len(sorted_items)} items")
         for item in sorted_items:
-            item["translated_title"] = item.get("translated_title") or item["title"]
-            item["translated_description"] = item.get("translated_description") or item["description"]
+            item["translated_title"] = item["title"]
+            item["translated_description"] = item["description"]
         logger.info(f"Preprocessed articles: {sorted_items}")
         return sorted_items
     except Exception as e:
@@ -761,9 +732,8 @@ def display_items(items):
                     tehran_time = parse_to_tehran_time(item["published_at"])
                     tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
                     truncated_description = truncate_text(item["description"], max_length=100)
-                    truncated_translated_description = truncate_text(item["translated_description"], max_length=100)
                     st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
-                    st.markdown(f'<h3 class="title-link"><a href="{item["url"]}" target="_blank">{item["translated_title"]}</a></h3>', unsafe_allow_html=True)
+                    st.markdown(f'<h3 class="title-link"><a href="{item["url"]}" target="_blank">{item["title"]}</a></h3>', unsafe_allow_html=True)
                     st.markdown(f'<div class="source-date">**Source:** {item["source"]} | **Published:** {tehran_time_str}</div>', unsafe_allow_html=True)
                     if item["image_url"]:
                         try:
@@ -771,7 +741,6 @@ def display_items(items):
                         except Exception:
                             st.info("Image failed to load")
                     st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="persian-text description">**Description (Translated):** {truncated_translated_description}</div>', unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.subheader("Financial Reports")
@@ -1016,8 +985,8 @@ def main():
                             if item.get("type") == "news":
                                 tehran_time = parse_to_tehran_time(item["published_at"])
                                 tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-                                final_title = item["translated_title"]
-                                final_description = item["translated_description"]
+                                final_title = translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
+                                final_description = translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
                                 truncated_description = truncate_text(final_description, max_length=100)
                                 article_content = extract_article_content(item["url"])
                                 translated_content = translate_with_avalai(article_content, "en", "fa", st.session_state.avalai_api_url)
