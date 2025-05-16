@@ -895,7 +895,9 @@ def display_items(items):
             if not isinstance(st.session_state.selected_items, list):
                 logger.error(f"st.session_state.selected_items is not a list: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                 st.session_state.selected_items = []
+            logger.info(f"Before len() - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
             selected_count = len(st.session_state.selected_items)
+            logger.info(f"After len() - selected_count: {selected_count}")
             st.write(f"You have selected {selected_count} article(s) to send to Telegram")
             logger.info(f"Current selected items: {st.session_state.selected_items}")
             
@@ -1218,7 +1220,7 @@ def main():
             if not isinstance(st.session_state.selected_items, list):
                 logger.error(f"st.session_state.selected_items is not a list before Telegram button: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                 st.session_state.selected_items = []
-            
+            logger.info(f"Before len() in Telegram button - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
             if st.button("Send Selected Items to Telegram", disabled=len(st.session_state.selected_items) == 0):
                 with st.spinner("Sending to Telegram..."):
                     success_count = 0
@@ -1299,6 +1301,7 @@ def main():
                 if not isinstance(st.session_state.selected_items, list):
                     logger.error(f"st.session_state.selected_items is not a list in info message: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                     st.session_state.selected_items = []
+                logger.info(f"Before len() in info message - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                 st.info(f"Select {len(st.session_state.selected_items)} item(s) to send to Telegram")
                 logger.info(f"No items selected for sending. Current count: {len(st.session_state.selected_items)}")
 
