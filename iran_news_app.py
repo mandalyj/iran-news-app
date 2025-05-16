@@ -474,18 +474,21 @@ def fetch_custom_scraped_news(max_records=20):
                     # استخراج تصویر
                     image_elem = article.find("img", src=True)
                     image_url = image_elem["src"] if image_elem else ""
+                    # ترجمه با Avalai
+                    translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+                    translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
                     news_items.append({
                         "title": title,
                         "url": article_url,
                         "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "description": description,
                         "image_url": image_url,
-                        "translated_title": "",
-                        "translated_description": "",
+                        "translated_title": translated_title,
+                        "translated_description": translated_description,
                         "source": source["name"],
                         "type": "news"
                     })
-                    logger.info(f"Successfully scraped article: {title}")
+                    logger.info(f"Successfully scraped article: {title} (Translated: {translated_title})")
         except Exception as e:
             logger.error(f"Error scraping {source['name']} ({source['url']}): {str(e)}")
     return news_items[:max_records]
