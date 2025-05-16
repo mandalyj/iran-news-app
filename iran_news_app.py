@@ -46,7 +46,7 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
-SCRAPE_SOURCES_FILE = "/tmp/scrape_sources.json"  # فایل برای ذخیره منابع اسکرپ
+SCRAPE_SOURCES_FILE = "/tmp/scrape_sources.json"
 
 # بارگذاری منابع اسکرپ از فایل
 def load_scrape_sources():
@@ -416,37 +416,57 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
         st.error(f"Error fetching from CurrentsAPI: {str(e)}")
         return [], str(e)
 
-# تابع جدید برای اسکرپ سایت‌های دلخواه
 def fetch_custom_scraped_news(max_records=20):
     scrape_sources = st.session_state.scrape_sources
     news_items = []
     for source in scrape_sources:
+        logger.info(f"Processing source: {source['name']} ({source['url']}, type: {source['type']})")
         try:
             if source["type"] == "rss":
+                logger.info(f"Attempting to parse RSS feed from {source['url']}")
                 feed = feedparser.parse(source["url"])
+                if feed.bozo:  # بررسی خطا در فید
+                    logger.error(f"RSS feed error for {source['name']}: {feed.bozo_exception}")
+                    continue
+                if not feed.entries:
+                    logger.warning(f"No entries found in RSS feed for {source['name']}")
+                    continue
                 for entry in feed.entries[:max_records]:
                     news_items.append({
                         "title": entry.get("title", "No title"),
                         "url": entry.get("link", ""),
                         "published_at": entry.get("published", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")),
-                        "description": entry.get("description", "") or "No description",
-                        "image_url": "",
+                        "description": entry.get("summary", "") or entry.get("description", "") or "No description",
+                        "image_url": entry.get("media_thumbnail", [{}])[0].get("url", ""),
                         "translated_title": "",
                         "translated_description": "",
                         "source": source["name"],
                         "type": "news"
                     })
+                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')}")
             elif source["type"] == "web":
-                response = requests.get(source["url"], timeout=10)
+                logger.info(f"Attempting to scrape web content from {source['url']}")
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                response = requests.get(source["url"], timeout=10, headers=headers)
+                response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
-                articles = soup.find_all("article") or soup.find_all("div", class_="article") or soup.find_all("div", class_="news-item")
+                # سلکتورهای متنوع‌تر برای سایت‌های خبری
+                articles = (
+                    soup.find_all("article", class_=["story", "article", "news"]) or
+                    soup.find_all("div", class_=["story-body", "article-content", "news-item"]) or
+                    soup.select(".headline a") or  # لینک‌های تیتر
+                    soup.find_all(["h2", "h3"], class_=["title", "headline"])
+                )
+                if not articles:
+                    logger.warning(f"No articles found in {source['url']} with current selectors. HTML sample: {soup.text[:200]}...")
+                    continue
                 for article in articles[:max_records]:
-                    title_elem = article.find("h3") or article.find("h2") or article.find("h1")
-                    link_elem = article.find("a")
-                    description_elem = article.find("p")
+                    title_elem = article.find(["h1", "h2", "h3"], class_=["title", "headline"]) or article.find("a", class_=["title", "headline"])
+                    link_elem = article.find("a", href=True)
+                    description_elem = article.find("p", class_=["summary", "description", "content"])
                     news_items.append({
                         "title": title_elem.text.strip() if title_elem else "No title",
-                        "url": link_elem.get("href") if link_elem else source["url"],
+                        "url": (link_elem["href"] if link_elem and link_elem["href"].startswith("http") else source["url"] + link_elem["href"]) if link_elem else source["url"],
                         "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
                         "description": description_elem.text.strip() if description_elem else "No description",
                         "image_url": "",
@@ -455,8 +475,9 @@ def fetch_custom_scraped_news(max_records=20):
                         "source": source["name"],
                         "type": "news"
                     })
+                    logger.info(f"Successfully scraped article: {title_elem.text.strip() if title_elem else 'No title'}")
         except Exception as e:
-            logger.error(f"Error scraping {source['name']}: {e}")
+            logger.error(f"Error scraping {source['name']} ({source['url']}): {str(e)}")
     return news_items[:max_records]
 
 def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
@@ -469,7 +490,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             "CryptoCompare (Crypto Reports)": fetch_cryptocompare_news,
             "Financial Report (FMP)": fetch_financial_report,
             "CurrentsAPI": fetch_currentsapi_news,
-            "Custom Scraped News": fetch_custom_scraped_news  # گزینه جدید
+            "Custom Scraped News": fetch_custom_scraped_news
         }
         fetch_function = api_functions.get(selected_api)
         if not fetch_function:
@@ -584,7 +605,7 @@ def extract_article_content(url):
         logger.info(f"Extracted content: {content[:100]}...")
         return truncate_text(content, max_length=500)
     except Exception as e:
-        logger.error(f"Error extracting content from {url}: {str(e)}")
+        logger.error(f"Error extracting content from {url): {str(e)}")
         return "Unable to extract content"
 
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
@@ -847,7 +868,7 @@ def main():
                 st.session_state.scrape_sources.append(new_source)
                 save_scrape_sources(st.session_state.scrape_sources)
                 st.success(f"Added {source_name} to scrape sources")
-                st.experimental_rerun()
+                st.rerun()
 
         st.subheader("Current Scrape Sources")
         if st.session_state.scrape_sources:
@@ -856,7 +877,7 @@ def main():
                 if st.button("Remove", key=f"remove_source_{i}"):
                     st.session_state.scrape_sources.pop(i)
                     save_scrape_sources(st.session_state.scrape_sources)
-                    st.experimental_rerun()
+                    st.rerun()
         else:
             st.info("No scrape sources added yet.")
 
@@ -905,7 +926,7 @@ def main():
             if os.path.exists(TEMP_FILE):
                 os.remove(TEMP_FILE)
             logger.info("Cleared results")
-            st.experimental_rerun()
+            st.rerun()
         
         if search_button:
             with st.spinner(f"Searching using {selected_api}..."):
