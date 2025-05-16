@@ -450,11 +450,12 @@ def fetch_custom_scraped_news(max_records=20):
                 response = requests.get(source["url"], timeout=10, headers=headers)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
-                # سلکتورهای متنوع‌تر برای سایت‌های خبری
+                # سلکتورهای خاص‌تر برای سایت‌های خبری مثل crypto.news
                 articles = (
+                    soup.select(".post-item, .article-card, .news-post") or  # کلاس‌های رایج در سایت‌های خبری
                     soup.find_all("article", class_=["story", "article", "news"]) or
                     soup.find_all("div", class_=["story-body", "article-content", "news-item"]) or
-                    soup.select(".headline a") or  # لینک‌های تیتر
+                    soup.select(".headline a") or
                     soup.find_all(["h2", "h3"], class_=["title", "headline"])
                 )
                 if not articles:
