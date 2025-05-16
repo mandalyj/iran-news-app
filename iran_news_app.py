@@ -9,6 +9,7 @@ from io import BytesIO
 import json
 import os
 from bs4 import BeautifulSoup
+import feedparser
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -45,6 +46,29 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
+SCRAPE_SOURCES_FILE = "/tmp/scrape_sources.json"  # فایل برای ذخیره منابع اسکرپ
+
+# بارگذاری منابع اسکرپ از فایل
+def load_scrape_sources():
+    try:
+        if os.path.exists(SCRAPE_SOURCES_FILE):
+            with open(SCRAPE_SOURCES_FILE, "r") as f:
+                data = json.load(f)
+                logger.info(f"Loaded {len(data)} scrape sources from {SCRAPE_SOURCES_FILE}")
+                return data
+        logger.info(f"File {SCRAPE_SOURCES_FILE} does not exist")
+        return []
+    except Exception as e:
+        logger.error(f"Error loading scrape sources: {str(e)}")
+        return []
+
+def save_scrape_sources(sources):
+    try:
+        with open(SCRAPE_SOURCES_FILE, "w") as f:
+            json.dump(sources, f)
+        logger.info(f"Saved {len(sources)} scrape sources to {SCRAPE_SOURCES_FILE}")
+    except Exception as e:
+        logger.error(f"Error saving scrape sources: {str(e)}")
 
 # Streamlit page configuration
 st.set_page_config(page_title="Iran News Aggregator", page_icon="📰", layout="wide")
@@ -290,7 +314,7 @@ def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=N
                 "image_url": a.get("imageurl", ""),
                 "translated_title": "",
                 "translated_description": "",
-                "type": "report"  # Changed to report since it provides market data
+                "type": "report"
             } for a in articles
         ]
         formatted_articles = formatted_articles[:max_records]
@@ -392,6 +416,49 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
         st.error(f"Error fetching from CurrentsAPI: {str(e)}")
         return [], str(e)
 
+# تابع جدید برای اسکرپ سایت‌های دلخواه
+def fetch_custom_scraped_news(max_records=20):
+    scrape_sources = st.session_state.scrape_sources
+    news_items = []
+    for source in scrape_sources:
+        try:
+            if source["type"] == "rss":
+                feed = feedparser.parse(source["url"])
+                for entry in feed.entries[:max_records]:
+                    news_items.append({
+                        "title": entry.get("title", "No title"),
+                        "url": entry.get("link", ""),
+                        "published_at": entry.get("published", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")),
+                        "description": entry.get("description", "") or "No description",
+                        "image_url": "",
+                        "translated_title": "",
+                        "translated_description": "",
+                        "source": source["name"],
+                        "type": "news"
+                    })
+            elif source["type"] == "web":
+                response = requests.get(source["url"], timeout=10)
+                soup = BeautifulSoup(response.text, "html.parser")
+                articles = soup.find_all("article") or soup.find_all("div", class_="article") or soup.find_all("div", class_="news-item")
+                for article in articles[:max_records]:
+                    title_elem = article.find("h3") or article.find("h2") or article.find("h1")
+                    link_elem = article.find("a")
+                    description_elem = article.find("p")
+                    news_items.append({
+                        "title": title_elem.text.strip() if title_elem else "No title",
+                        "url": link_elem.get("href") if link_elem else source["url"],
+                        "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "description": description_elem.text.strip() if description_elem else "No description",
+                        "image_url": "",
+                        "translated_title": "",
+                        "translated_description": "",
+                        "source": source["name"],
+                        "type": "news"
+                    })
+        except Exception as e:
+            logger.error(f"Error scraping {source['name']}: {e}")
+    return news_items[:max_records]
+
 def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
     try:
         logger.info(f"Fetching from {selected_api}: query={query}, max_records={max_records}, from_date={from_date}, to_date={to_date}")
@@ -399,9 +466,10 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             "GNews": fetch_gnews,
             "World News API": fetch_worldnews,
             "NewsAPI (Crypto News)": fetch_newsapi_crypto_news,
-            "CryptoCompare (Crypto Reports)": fetch_cryptocompare_news,  # Added back for reports
+            "CryptoCompare (Crypto Reports)": fetch_cryptocompare_news,
             "Financial Report (FMP)": fetch_financial_report,
-            "CurrentsAPI": fetch_currentsapi_news
+            "CurrentsAPI": fetch_currentsapi_news,
+            "Custom Scraped News": fetch_custom_scraped_news  # گزینه جدید
         }
         fetch_function = api_functions.get(selected_api)
         if not fetch_function:
@@ -409,7 +477,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             st.error(f"Invalid API: {selected_api}")
             return []
         fetch_query = query if selected_api not in ["Financial Report (FMP)", "CryptoCompare (Crypto Reports)"] else query.upper()
-        items, error = fetch_function(fetch_query, max_records, from_date, to_date)
+        items, error = fetch_function(fetch_query, max_records, from_date, to_date) if selected_api != "Custom Scraped News" else (fetch_function(max_records), None)
         if not isinstance(items, list):
             logger.error(f"Did not receive a list: {items}")
             st.error("Did not receive a list")
@@ -752,7 +820,6 @@ def main():
             st.session_state.selected_items = []
             logger.info("Initialized selected_items as an empty list")
         
-        # Initialize articles list in session state
         if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
             st.session_state.articles = load_articles_from_file()
             logger.info(f"Initialized st.session_state.articles: {st.session_state.articles}")
@@ -762,7 +829,37 @@ def main():
         
         if not hasattr(st.session_state, 'avalai_api_url'):
             st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
-        
+
+        # Initialize scrape sources
+        if not hasattr(st.session_state, 'scrape_sources'):
+            st.session_state.scrape_sources = load_scrape_sources()
+            logger.info(f"Initialized st.session_state.scrape_sources: {st.session_state.scrape_sources}")
+
+        # Add section for adding custom scrape sources
+        st.header("Add Custom Scrape Sources")
+        with st.form(key="scrape_form"):
+            source_name = st.text_input("Source Name", value="")
+            source_url = st.text_input("Source URL", value="")
+            source_type = st.selectbox("Source Type", options=["web", "rss"], index=0)
+            submit_button = st.form_submit_button(label="Add Source")
+            if submit_button and source_name and source_url:
+                new_source = {"name": source_name, "url": source_url, "type": source_type}
+                st.session_state.scrape_sources.append(new_source)
+                save_scrape_sources(st.session_state.scrape_sources)
+                st.success(f"Added {source_name} to scrape sources")
+                st.experimental_rerun()
+
+        st.subheader("Current Scrape Sources")
+        if st.session_state.scrape_sources:
+            for i, source in enumerate(st.session_state.scrape_sources):
+                st.write(f"{i + 1}. {source['name']} - {source['url']} ({source['type']})")
+                if st.button("Remove", key=f"remove_source_{i}"):
+                    st.session_state.scrape_sources.pop(i)
+                    save_scrape_sources(st.session_state.scrape_sources)
+                    st.experimental_rerun()
+        else:
+            st.info("No scrape sources added yet.")
+
         with st.sidebar:
             st.header("Search Settings")
             query = st.text_input("Search query (or company symbol for financial reports)", value="Iran")
@@ -771,7 +868,7 @@ def main():
             start_date = st.date_input("Start date", value=one_year_ago, min_value=one_year_ago, max_value=today)
             end_date = st.date_input("End date", value=today, min_value=one_year_ago, max_value=today)
             max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=20)
-            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "CryptoCompare (Crypto Reports)", "Financial Report (FMP)", "CurrentsAPI"]
+            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "CryptoCompare (Crypto Reports)", "Financial Report (FMP)", "CurrentsAPI", "Custom Scraped News"]
             selected_api = st.selectbox("Select API", options=api_options, index=0)
             time_range_options = {
                 "Last 30 minutes": 0.5, "Last 1 hour": 1, "Last 4 hours": 4,
