@@ -527,9 +527,9 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
         return items
 
 def update_selected_items(action, item=None):
-    if not isinstance(st.session_state.selected_items, list):
-        logger.error(f"selected_items is not a list: {st.session_state.selected_items}, type: {type(st.session_state.selected_items)}")
+    if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
         st.session_state.selected_items = []
+        logger.info("Initialized selected_items as an empty list")
     if action == "add" and item:
         st.session_state.selected_items.append(item)
         logger.info(f"Adding item: {item.get('title', item.get('symbol'))}")
@@ -564,9 +564,9 @@ def display_items(items):
                 st.write(f"All articles from: {sources.iloc[0, 0]}")
             
             st.subheader("Selected Articles")
-            if not isinstance(st.session_state.selected_items, list):
-                logger.error(f"selected_items is not a list: {st.session_state.selected_items}")
+            if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
                 st.session_state.selected_items = []
+                logger.info("Re-initialized selected_items as an empty list")
             st.write(f"You have selected {len(st.session_state.selected_items)} articles for Telegram")
             
             st.subheader("News Articles")
@@ -690,15 +690,19 @@ def main():
         st.title("Iran News Aggregator")
         
         # Initialize session state
-        if 'selected_items' not in st.session_state or not isinstance(st.session_state.selected_items, list):
+        if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
-            logger.info("Initialized selected_items")
-        if 'items' not in st.session_state or not isinstance(st.session_state.get('items', []), list):
-            st.session_state.items = load_articles_from_file()
-            logger.info(f"Initialized st.session_state.items: {st.session_state.items}")
-        if 'chat_ids' not in st.session_state:
+            logger.info("Initialized selected_items as an empty list")
+        
+        # Initialize articles list in session state
+        if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
+            st.session_state.articles = load_articles_from_file()
+            logger.info(f"Initialized st.session_state.articles: {st.session_state.articles}")
+        
+        if not hasattr(st.session_state, 'chat_ids'):
             st.session_state.chat_ids = load_chat_ids()
-        if 'avalai_api_url' not in st.session_state:
+        
+        if not hasattr(st.session_state, 'avalai_api_url'):
             st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
         
         with st.sidebar:
@@ -741,7 +745,7 @@ def main():
             download_format = st.selectbox("Download format", ["CSV", "JSON"])
         
         if clear_button:
-            st.session_state.items = []
+            st.session_state.articles = []
             update_selected_items("clear")
             if os.path.exists(TEMP_FILE):
                 os.remove(TEMP_FILE)
@@ -760,24 +764,25 @@ def main():
                     logger.info(f"After filter_articles_by_time, number of items: {len(items)}, items: {items}")
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation, num_items_to_translate)
                     logger.info(f"After pre_process_articles, number of items: {len(items)}, items: {items}")
-                    # Ensure st.session_state.items is a list
-                    st.session_state.items = list(items) if isinstance(items, (list, tuple)) else []
-                    logger.info(f"Assigned to st.session_state.items: {st.session_state.items}")
-                    save_articles_to_file(st.session_state.items)
+                    # Ensure st.session_state.articles is a list
+                    st.session_state.articles = list(items) if isinstance(items, (list, tuple)) else []
+                    logger.info(f"Assigned to st.session_state.articles: {st.session_state.articles}")
+                    save_articles_to_file(st.session_state.articles)
                     update_selected_items("clear")
                 else:
-                    st.session_state.items = []
-                    logger.warning("No items fetched, st.session_state.items cleared")
+                    st.session_state.articles = []
+                    logger.warning("No items fetched, st.session_state.articles cleared")
         
-        # Ensure st.session_state.items is a list before displaying
-        if not isinstance(st.session_state.items, list):
-            logger.error(f"st.session_state.items is not a list: {st.session_state.items}, type: {type(st.session_state.items)}")
-            st.session_state.items = []
-        if st.session_state.items:
-            logger.info(f"st.session_state.items before display: {st.session_state.items}")
-            display_items(st.session_state.items)
+        # Ensure st.session_state.articles is a list before displaying
+        if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
+            logger.error(f"st.session_state.articles is not a list: {getattr(st.session_state, 'articles', None)}, type: {type(getattr(st.session_state, 'articles', None))}")
+            st.session_state.articles = []
+        
+        if st.session_state.articles:
+            logger.info(f"st.session_state.articles before display: {st.session_state.articles}")
+            display_items(st.session_state.articles)
         else:
-            logger.warning("st.session_state.items is empty, nothing to display")
+            logger.warning("st.session_state.articles is empty, nothing to display")
             st.warning("No items to display")
         
         with st.sidebar:
@@ -786,9 +791,9 @@ def main():
                 update_selected_items("clear")
                 st.success("Selection reset")
             
-            if not isinstance(st.session_state.selected_items, list):
-                logger.error(f"selected_items is not a list: {st.session_state.selected_items}")
+            if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
                 st.session_state.selected_items = []
+                logger.info("Re-initialized selected_items as an empty list")
             selected_items_len = len(st.session_state.selected_items)
             
             if st.button("Send selected items to Telegram", disabled=selected_items_len == 0):
@@ -830,7 +835,7 @@ def main():
                                     f"**Earnings Per Share (EPS):** {item['eps']}\n"
                                     f"**Gross Profit:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
                                     f"**Operating Income:** {item['operatingIncome']:,} {item['reportedCurrency']}"
-                                )
+        )
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=(item.get("type") != "news"))
                             if success:
                                 success_count += 1
@@ -848,16 +853,16 @@ def main():
             else:
                 st.info(f"Select {selected_items_len} items to send to Telegram")
         
-        if st.session_state.items:
+        if st.session_state.articles:
             with st.sidebar:
                 if download_format == "CSV":
-                    csv_data = save_items_to_file_for_download(st.session_state.items, format="csv")
+                    csv_data = save_items_to_file_for_download(st.session_state.articles, format="csv")
                     st.download_button(
                         label="Download as CSV", data=csv_data or b"",
                         file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv"
                     )
                 else:
-                    json_data = save_items_to_file_for_download(st.session_state.items, format="json")
+                    json_data = save_items_to_file_for_download(st.session_state.articles, format="json")
                     st.download_button(
                         label="Download as JSON", data=json_data or b"",
                         file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json"
@@ -869,8 +874,9 @@ def main():
     except Exception as e:
         logger.error(f"Error in main: {str(e)}")
         st.error(f"Error in main: {str(e)}")
-        if not isinstance(st.session_state.selected_items, list):
+        if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
+            logger.info("Re-initialized selected_items as an empty list")
 
 if __name__ == "__main__":
     main()
