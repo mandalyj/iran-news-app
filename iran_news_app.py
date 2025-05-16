@@ -533,7 +533,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         return text
     if AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
         logger.error("Avalai API key is invalid")
-        st.error("Avalai API key is invalid")
+        st.error("Avalai API key is invalid. Please set the AVALAI_API_KEY environment variable.")
         return text
     endpoint = f"{avalai_api_url}/chat/completions"
     headers = {
@@ -547,7 +547,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
     }
     try:
         logger.info(f"Sending translation request to Avalai: {text[:100]}...")
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=30)  # تایم‌اوت افزایش یافت
         response.raise_for_status()
         data = response.json()
         logger.info(f"Avalai response: {data}")
@@ -556,11 +556,11 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
             logger.info(f"Translated text: {translated_text[:100]}...")
             return translated_text
         logger.warning(f"Avalai API response has no choices: {data}")
-        st.warning("Issue with Avalai API response")
+        st.warning("Issue with Avalai API response: No translation returned.")
         return text
     except Exception as e:
         logger.error(f"Error in translation: {str(e)}")
-        st.error(f"Error in translation: {str(e)}")
+        st.error(f"Error in translation: {str(e)}. Falling back to original text.")
         return text
 
 def summarize_with_gemini(text, max_length=100):
@@ -569,7 +569,7 @@ def summarize_with_gemini(text, max_length=100):
         return "No content to summarize"
     if GOOGLE_AI_API_KEY == "YOUR_GOOGLE_AI_API_KEY":
         logger.error("Google AI API key is invalid")
-        st.error("Google AI API key is invalid")
+        st.error("Google AI API key is invalid. Please set the GOOGLE_AI_API_KEY environment variable.")
         return text
 
     endpoint = f"{GOOGLE_AI_API_URL}/models/gemini-1.5-flash:generateContent?key={GOOGLE_AI_API_KEY}"
@@ -598,11 +598,11 @@ def summarize_with_gemini(text, max_length=100):
             logger.info(f"Generated summary: {summary[:100]}...")
             return summary
         logger.warning(f"Gemini API response has no candidates: {data}")
-        st.warning("Issue with Gemini API response")
+        st.warning("Issue with Gemini API response: No summary returned.")
         return text
     except Exception as e:
         logger.error(f"Error in summarization with Gemini: {str(e)}")
-        st.error(f"Error in summarization with Gemini: {str(e)}")
+        st.error(f"Error in summarization with Gemini: {str(e)}. Falling back to original text.")
         return text
 
 def extract_article_content(url):
@@ -821,10 +821,16 @@ def save_items_to_file_for_download(items, format="csv"):
         logger.error(f"Error saving items for download: {str(e)}")
         return None
 
+def clean_markdown_text(text):
+    # حذف یا فرار کردن کاراکترهای خاص که ممکن است در Markdown مشکل ایجاد کنند
+    text = text.replace("*", "\\*").replace("_", "\\_").replace("[", "\\[").replace("]", "\\]")
+    return text
+
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
             message = message[:4093] + "..."
+        message = clean_markdown_text(message)  # پاکسازی پیام برای Markdown
         url = f"{TELEGRAM_API_URL}/sendMessage"
         data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
         logger.info(f"Sending message to Telegram: {chat_id}")
