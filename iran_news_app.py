@@ -32,6 +32,8 @@ WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
 WORLDNEWS_API_KEY = os.environ.get("WORLDNEWS_API_KEY", "YOUR_WORLDNEWS_API_KEY")
 NEWSAPI_API_URL = "https://newsapi.org/v2/everything"
 NEWSAPI_API_KEY = os.environ.get("NEWSAPI_API_KEY", "YOUR_NEWSAPI_API_KEY")
+CRYPTOCOMPARE_API_URL = "https://min-api.cryptocompare.com/data/v2/news/"
+CRYPTOCOMPARE_API_KEY = os.environ.get("CRYPTOCOMPARE_API_KEY", "YOUR_CRYPTOCOMPARE_API_KEY")
 FMP_API_URL = "https://financialmodelingprep.com/api/v3"
 FMP_API_KEY = os.environ.get("FMP_API_KEY", "YOUR_FMP_API_KEY")
 AVALAI_API_URL_DEFAULT = "https://api.avalai.ir/v1"
@@ -250,6 +252,55 @@ def fetch_newsapi_crypto_news(query="cryptocurrency", max_records=20, from_date=
         st.error(f"Error fetching from NewsAPI: {str(e)}")
         return [], str(e)
 
+def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
+    if CRYPTOCOMPARE_API_KEY == "YOUR_CRYPTOCOMPARE_API_KEY":
+        logger.error("CryptoCompare API key is invalid")
+        st.error("CryptoCompare API key is invalid")
+        return [], "Invalid API key"
+    
+    endpoint = CRYPTOCOMPARE_API_URL
+    headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
+    params = {
+        "lang": "EN",
+        "api_key": CRYPTOCOMPARE_API_KEY,
+        "feeds": "cryptocompare",
+    }
+    try:
+        logger.info(f"Sending request to CryptoCompare with params: {params}")
+        response = requests.get(endpoint, params=params, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"CryptoCompare response: {data}")
+        if data.get("Response") == "Error":
+            logger.error(f"CryptoCompare API error: {data.get('Message')}")
+            st.error(f"CryptoCompare API error: {data.get('Message')}")
+            return [], data.get('Message')
+        articles = data.get("Data", [])
+        if not articles:
+            logger.warning(f"No articles found for '{query}' on CryptoCompare")
+            st.warning(f"No articles found for '{query}' on CryptoCompare")
+            return [], "No articles found"
+        formatted_articles = [
+            {
+                "title": a.get("title", "No title"),
+                "url": a.get("url", ""),
+                "source": a.get("source", "CryptoCompare"),
+                "published_at": datetime.fromtimestamp(a.get("published_on", 0)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "description": a.get("body", "") or "No description",
+                "image_url": a.get("imageurl", ""),
+                "translated_title": "",
+                "translated_description": "",
+                "type": "report"  # Changed to report since it provides market data
+            } for a in articles
+        ]
+        formatted_articles = formatted_articles[:max_records]
+        logger.info(f"Fetched {len(formatted_articles)} reports from CryptoCompare: {formatted_articles}")
+        return formatted_articles, None
+    except Exception as e:
+        logger.error(f"Error fetching from CryptoCompare: {str(e)}")
+        st.error(f"Error fetching from CryptoCompare: {str(e)}")
+        return [], str(e)
+
 def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
     if FMP_API_KEY == "YOUR_FMP_API_KEY":
         logger.error("FMP API key is invalid")
@@ -347,7 +398,8 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         api_functions = {
             "GNews": fetch_gnews,
             "World News API": fetch_worldnews,
-            "NewsAPI (Crypto News)": fetch_newsapi_crypto_news,  # Updated to NewsAPI
+            "NewsAPI (Crypto News)": fetch_newsapi_crypto_news,
+            "CryptoCompare (Crypto Reports)": fetch_cryptocompare_news,  # Added back for reports
             "Financial Report (FMP)": fetch_financial_report,
             "CurrentsAPI": fetch_currentsapi_news
         }
@@ -356,7 +408,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             logger.error(f"Invalid API: {selected_api}")
             st.error(f"Invalid API: {selected_api}")
             return []
-        fetch_query = query if selected_api != "Financial Report (FMP)" else query.upper()
+        fetch_query = query if selected_api not in ["Financial Report (FMP)", "CryptoCompare (Crypto Reports)"] else query.upper()
         items, error = fetch_function(fetch_query, max_records, from_date, to_date)
         if not isinstance(items, list):
             logger.error(f"Did not receive a list: {items}")
@@ -366,7 +418,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             logger.error(f"Error in {selected_api}: {error}")
             st.error(f"{selected_api}: {error}")
         if items:
-            if selected_api != "Financial Report (FMP)":
+            if selected_api not in ["Financial Report (FMP)", "CryptoCompare (Crypto Reports)"]:
                 seen_urls = set()
                 unique_items = [item for item in items if item["url"] not in seen_urls and not seen_urls.add(item["url"])]
                 items = unique_items[:max_records]
@@ -714,12 +766,12 @@ def main():
         with st.sidebar:
             st.header("Search Settings")
             query = st.text_input("Search query (or company symbol for financial reports)", value="Iran")
-            today = datetime(2025, 5, 15)
-            default_start_date = today - timedelta(days=7)
-            start_date = st.date_input("Start date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today)
-            end_date = st.date_input("End date", value=today, min_value=start_date, max_value=today)
+            today = datetime.now()
+            one_year_ago = today - timedelta(days=365)
+            start_date = st.date_input("Start date", value=one_year_ago, min_value=one_year_ago, max_value=today)
+            end_date = st.date_input("End date", value=today, min_value=one_year_ago, max_value=today)
             max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=20)
-            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "Financial Report (FMP)", "CurrentsAPI"]
+            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "CryptoCompare (Crypto Reports)", "Financial Report (FMP)", "CurrentsAPI"]
             selected_api = st.selectbox("Select API", options=api_options, index=0)
             time_range_options = {
                 "Last 30 minutes": 0.5, "Last 1 hour": 1, "Last 4 hours": 4,
@@ -727,7 +779,7 @@ def main():
             }
             selected_time_range = st.selectbox("Time range (for news)", options=list(time_range_options.keys()), index=4)
             time_range_hours = time_range_options[selected_time_range]
-            disable_time_filter = st.checkbox("Disable time filter", value=True)  # Default disabled for testing
+            disable_time_filter = st.checkbox("Disable time filter", value=True)
             
             st.header("Translation Settings (for news)")
             avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
@@ -770,7 +822,6 @@ def main():
                     logger.info(f"After filter_articles_by_time, number of items: {len(items)}, items: {items}")
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation, num_items_to_translate)
                     logger.info(f"After pre_process_articles, number of items: {len(items)}, items: {items}")
-                    # Ensure st.session_state.articles is a list
                     st.session_state.articles = list(items) if isinstance(items, (list, tuple)) else []
                     logger.info(f"Assigned to st.session_state.articles: {st.session_state.articles}")
                     save_articles_to_file(st.session_state.articles)
@@ -779,7 +830,6 @@ def main():
                     st.session_state.articles = []
                     logger.warning("No items fetched, st.session_state.articles cleared")
         
-        # Ensure st.session_state.articles is a list before displaying
         if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
             logger.error(f"st.session_state.articles is not a list: {getattr(st.session_state, 'articles', None)}, type: {type(getattr(st.session_state, 'articles', None))}")
             st.session_state.articles = []
@@ -819,8 +869,8 @@ def main():
                             if item.get("type") == "news":
                                 tehran_time = parse_to_tehran_time(item["published_at"])
                                 tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-                                final_title = item["translated_title"] or translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
-                                final_description = item["translated_description"] or translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
+                                final_title = item["translated_title"] if item.get("translated_title") else translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
+                                final_description = item["translated_description"] if item.get("translated_description") else translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
                                 truncated_description = truncate_text(final_description, max_length=100)
                                 article_content = extract_article_content(item["url"])
                                 translated_content = translate_with_avalai(article_content, "en", "fa", st.session_state.avalai_api_url)
