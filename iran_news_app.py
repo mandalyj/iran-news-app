@@ -165,14 +165,19 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
             logger.warning(f"No articles found for '{query}' on GNews")
             st.warning(f"No articles found for '{query}' on GNews")
             return [], "No articles found"
-        formatted_articles = [
-            {
-                "title": a.get("title", "No title"), "url": a.get("url", ""),
+        formatted_articles = []
+        for a in articles:
+            title = a.get("title", "No title")
+            description = a.get("description", "") or "No description"
+            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
+            formatted_articles.append({
+                "title": title, "url": a.get("url", ""),
                 "source": a.get("source", {}).get("name", "Unknown source"),
-                "published_at": a.get("publishedAt", ""), "description": a.get("description", "") or "No description",
-                "image_url": a.get("image", ""), "translated_title": "", "translated_description": "", "type": "news"
-            } for a in articles
-        ]
+                "published_at": a.get("publishedAt", ""), "description": description,
+                "image_url": a.get("image", ""), "translated_title": translated_title,
+                "translated_description": translated_description, "type": "news"
+            })
         logger.info(f"Fetched {len(formatted_articles)} articles from GNews: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
@@ -207,14 +212,19 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
             logger.warning(f"No articles found for '{query}' on World News API")
             st.warning(f"No articles found for '{query}' on World News API")
             return [], "No articles found"
-        formatted_articles = [
-            {
-                "title": a.get("title", "No title"), "url": a.get("url", ""),
+        formatted_articles = []
+        for a in articles:
+            title = a.get("title", "No title")
+            description = a.get("text", "") or "No description"
+            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
+            formatted_articles.append({
+                "title": title, "url": a.get("url", ""),
                 "source": a.get("source", "Unknown source"), "published_at": a.get("publish_date", ""),
-                "description": a.get("text", "") or "No description", "image_url": a.get("image", ""),
-                "translated_title": "", "translated_description": "", "type": "news"
-            } for a in articles
-        ]
+                "description": description, "image_url": a.get("image", ""),
+                "translated_title": translated_title, "translated_description": translated_description,
+                "type": "news"
+            })
         logger.info(f"Fetched {len(formatted_articles)} articles from World News API: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
@@ -256,19 +266,23 @@ def fetch_newsapi_crypto_news(query="cryptocurrency", max_records=20, from_date=
             logger.warning(f"No articles found for '{query}' on NewsAPI")
             st.warning(f"No articles found for '{query}' on NewsAPI")
             return [], "No articles found"
-        formatted_articles = [
-            {
-                "title": a.get("title", "No title"),
+        formatted_articles = []
+        for a in articles:
+            title = a.get("title", "No title")
+            description = a.get("description", "") or "No description"
+            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
+            formatted_articles.append({
+                "title": title,
                 "url": a.get("url", ""),
                 "source": a.get("source", {}).get("name", "Unknown source"),
                 "published_at": a.get("publishedAt", ""),
-                "description": a.get("description", "") or "No description",
+                "description": description,
                 "image_url": a.get("urlToImage", ""),
-                "translated_title": "",
-                "translated_description": "",
+                "translated_title": translated_title,
+                "translated_description": translated_description,
                 "type": "news"
-            } for a in articles
-        ]
+            })
         logger.info(f"Fetched {len(formatted_articles)} articles from NewsAPI: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
@@ -304,19 +318,23 @@ def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=N
             logger.warning(f"No articles found for '{query}' on CryptoCompare")
             st.warning(f"No articles found for '{query}' on CryptoCompare")
             return [], "No articles found"
-        formatted_articles = [
-            {
-                "title": a.get("title", "No title"),
+        formatted_articles = []
+        for a in articles:
+            title = a.get("title", "No title")
+            description = a.get("body", "") or "No description"
+            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
+            formatted_articles.append({
+                "title": title,
                 "url": a.get("url", ""),
                 "source": a.get("source", "CryptoCompare"),
                 "published_at": datetime.fromtimestamp(a.get("published_on", 0)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "description": a.get("body", "") or "No description",
+                "description": description,
                 "image_url": a.get("imageurl", ""),
-                "translated_title": "",
-                "translated_description": "",
+                "translated_title": translated_title,
+                "translated_description": translated_description,
                 "type": "report"
-            } for a in articles
-        ]
+            })
         formatted_articles = formatted_articles[:max_records]
         logger.info(f"Fetched {len(formatted_articles)} reports from CryptoCompare: {formatted_articles}")
         return formatted_articles, None
@@ -401,14 +419,19 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
             logger.warning(f"No articles found for '{query}' on CurrentsAPI")
             st.warning(f"No articles found for '{query}' on CurrentsAPI")
             return [], "No articles found"
-        formatted_articles = [
-            {
-                "title": article.get("title", "No title"), "url": article.get("url", ""),
+        formatted_articles = []
+        for article in news:
+            title = article.get("title", "No title")
+            description = article.get("description", "") or "No description"
+            translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+            translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
+            formatted_articles.append({
+                "title": title, "url": article.get("url", ""),
                 "source": article.get("source", {}).get("name", "Unknown source"),
-                "published_at": article.get("published", ""), "description": article.get("description", "") or "No description",
-                "image_url": article.get("image", ""), "translated_title": "", "translated_description": "", "type": "news"
-            } for article in news
-        ]
+                "published_at": article.get("published", ""), "description": description,
+                "image_url": article.get("image", ""), "translated_title": translated_title,
+                "translated_description": translated_description, "type": "news"
+            })
         logger.info(f"Fetched {len(formatted_articles)} articles from CurrentsAPI: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
@@ -425,32 +448,35 @@ def fetch_custom_scraped_news(max_records=20):
             if source["type"] == "rss":
                 logger.info(f"Attempting to parse RSS feed from {source['url']}")
                 feed = feedparser.parse(source["url"])
-                if feed.bozo:  # بررسی خطا در فید
+                if feed.bozo:
                     logger.error(f"RSS feed error for {source['name']}: {feed.bozo_exception}")
                     continue
                 if not feed.entries:
                     logger.warning(f"No entries found in RSS feed for {source['name']}")
                     continue
                 for entry in feed.entries[:max_records]:
+                    title = entry.get("title", "No title")
+                    description = entry.get("summary", "") or entry.get("description", "") or "No description"
+                    translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
+                    translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
                     news_items.append({
-                        "title": entry.get("title", "No title"),
+                        "title": title,
                         "url": entry.get("link", ""),
                         "published_at": entry.get("published", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")),
-                        "description": entry.get("summary", "") or entry.get("description", "") or "No description",
+                        "description": description,
                         "image_url": entry.get("media_thumbnail", [{}])[0].get("url", ""),
-                        "translated_title": "",
-                        "translated_description": "",
+                        "translated_title": translated_title,
+                        "translated_description": translated_description,
                         "source": source["name"],
                         "type": "news"
                     })
-                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')}")
+                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')} (Translated: {translated_title})")
             elif source["type"] == "web":
                 logger.info(f"Attempting to scrape web content from {source['url']}")
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
                 response = requests.get(source["url"], timeout=10, headers=headers)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
-                # یافتن همه مقالات در صفحه اصلی
                 articles = soup.find_all("article")
                 if not articles:
                     logger.warning(f"No articles found in {source['url']} with current selectors. HTML sample: {soup.text[:200]}...")
@@ -458,23 +484,18 @@ def fetch_custom_scraped_news(max_records=20):
                     continue
                 logger.info(f"Found {len(articles)} potential articles")
                 for article in articles[:max_records]:
-                    # استخراج عنوان
                     title_elem = article.find("h2")
                     title = title_elem.text.strip() if title_elem else "No title"
-                    # استخراج خلاصه
                     description_elem = article.find("p")
                     description = description_elem.text.strip() if description_elem else "No description"
-                    # استخراج لینک مقاله
                     link_elem = article.find("a", href=True)
                     article_url = (
                         link_elem["href"] if link_elem and link_elem["href"].startswith("http") else
                         source["url"].rstrip("/") + "/" + link_elem["href"].lstrip("/") if link_elem else
                         source["url"]
                     )
-                    # استخراج تصویر
                     image_elem = article.find("img", src=True)
                     image_url = image_elem["src"] if image_elem else ""
-                    # ترجمه با Avalai
                     translated_title = translate_with_avalai(title, source_lang="en", target_lang="fa")
                     translated_description = translate_with_avalai(description, source_lang="en", target_lang="fa")
                     news_items.append({
@@ -618,7 +639,7 @@ def extract_article_content(url):
         logger.info(f"Extracted content: {content[:100]}...")
         return truncate_text(content, max_length=500)
     except Exception as e:
-        logger.error(f"Error extracting content from {url}: {str(e)}")  # خط اصلاح‌شده
+        logger.error(f"Error extracting content from {url}: {str(e)}")
         return "Unable to extract content"
 
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
@@ -671,14 +692,9 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
     try:
         sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
         logger.info(f"Sorted articles: {len(sorted_items)} items")
-        for i, item in enumerate(sorted_items):
-            if enable_translation and i < num_items_to_translate:
-                logger.info(f"Translating article {i+1}: {item['title']}")
-                item["translated_title"] = translate_with_avalai(item["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-                item["translated_description"] = translate_with_avalai(item["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
-            else:
-                item["translated_title"] = item["title"]
-                item["translated_description"] = item["description"]
+        for item in sorted_items:
+            item["translated_title"] = item.get("translated_title") or item["title"]
+            item["translated_description"] = item.get("translated_description") or item["description"]
         logger.info(f"Preprocessed articles: {sorted_items}")
         return sorted_items
     except Exception as e:
@@ -1000,8 +1016,8 @@ def main():
                             if item.get("type") == "news":
                                 tehran_time = parse_to_tehran_time(item["published_at"])
                                 tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-                                final_title = item["translated_title"] if item.get("translated_title") else translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
-                                final_description = item["translated_description"] if item.get("translated_description") else translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
+                                final_title = item["translated_title"]
+                                final_description = item["translated_description"]
                                 truncated_description = truncate_text(final_description, max_length=100)
                                 article_content = extract_article_content(item["url"])
                                 translated_content = translate_with_avalai(article_content, "en", "fa", st.session_state.avalai_api_url)
