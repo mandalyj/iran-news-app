@@ -893,13 +893,13 @@ def display_items(items):
             st.subheader("Selected Articles")
             # Ensure selected_items is a list before calling len()
             if not isinstance(st.session_state.selected_items, list):
-                logger.error(f"st.session_state.selected_items is not a list: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                logger.error(f"st.session_state.selected_items is not a list in display_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                 st.session_state.selected_items = []
-            logger.info(f"Before len() - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+            logger.info(f"Before len() in display_items - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
             selected_count = len(st.session_state.selected_items)
-            logger.info(f"After len() - selected_count: {selected_count}")
+            logger.info(f"After len() in display_items - selected_count: {selected_count}")
             st.write(f"You have selected {selected_count} article(s) to send to Telegram")
-            logger.info(f"Current selected items: {st.session_state.selected_items}")
+            logger.info(f"Current selected items in display_items: {st.session_state.selected_items}")
             
             st.subheader("News Articles")
             col1, col2 = st.columns(2)
@@ -910,16 +910,33 @@ def display_items(items):
                     st.markdown(f'<div class="neon-line-top"></div>', unsafe_allow_html=True)
                     logger.info(f"Rendering article {i+1}: {item['title']}")
                     
+                    # Ensure selected_items is a list before using it
+                    if not isinstance(st.session_state.selected_items, list):
+                        logger.error(f"st.session_state.selected_items is not a list before checkbox: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                        st.session_state.selected_items = []
+                    
                     is_selected = any(a.get('url') == item['url'] for a in st.session_state.selected_items)
                     checkbox_key = f"article_{i}"
                     if st.checkbox("Select for Telegram", key=checkbox_key, value=is_selected):
                         if not is_selected:
+                            # Double-check before append
+                            if not isinstance(st.session_state.selected_items, list):
+                                logger.error(f"st.session_state.selected_items is not a list before append: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                                st.session_state.selected_items = []
+                            logger.info(f"Before append - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                             st.session_state.selected_items.append(item)
                             logger.info(f"Added article to selected: {item['title']}")
+                            logger.info(f"After append - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                     else:
                         if is_selected:
+                            # Double-check before list comprehension
+                            if not isinstance(st.session_state.selected_items, list):
+                                logger.error(f"st.session_state.selected_items is not a list before removal: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                                st.session_state.selected_items = []
+                            logger.info(f"Before removal - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                             st.session_state.selected_items = [a for a in st.session_state.selected_items if a.get('url') != item['url']]
                             logger.info(f"Removed article from selected: {item['title']}")
+                            logger.info(f"After removal - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                     
                     tehran_time = parse_to_tehran_time(item["published_at"])
                     tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
@@ -1061,7 +1078,7 @@ def main():
     try:
         st.title("Iran News Aggregator")
         
-        # Initialize session state variables
+        # Initialize session state variables with strict type checking
         if 'selected_items' not in st.session_state or not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
             logger.info("Initialized st.session_state.selected_items as an empty list")
@@ -1079,7 +1096,7 @@ def main():
         
         # Ensure selected_items is always a list
         if not isinstance(st.session_state.selected_items, list):
-            logger.error(f"st.session_state.selected_items is not a list: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+            logger.error(f"st.session_state.selected_items is not a list at main start: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
             st.session_state.selected_items = []
         
         logger.info(f"Session state items at start: {st.session_state.items}, Type: {type(st.session_state.items)}")
@@ -1158,7 +1175,11 @@ def main():
         
         if clear_button:
             st.session_state.items = []
-            st.session_state.selected_items = []
+            if not isinstance(st.session_state.selected_items, list):
+                logger.error(f"st.session_state.selected_items is not a list before clear: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                st.session_state.selected_items = []
+            else:
+                st.session_state.selected_items = []
             if os.path.exists(TEMP_FILE):
                 os.remove(TEMP_FILE)
             logger.info("Cleared session state and removed temp file")
@@ -1195,7 +1216,11 @@ def main():
                     logger.info(f"After preprocessing: {len(items)} items")
                     st.session_state.items = items if isinstance(items, list) else []
                     save_articles_to_file(st.session_state.items)
-                    st.session_state.selected_items = []
+                    if not isinstance(st.session_state.selected_items, list):
+                        logger.error(f"st.session_state.selected_items is not a list before resetting in search: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                        st.session_state.selected_items = []
+                    else:
+                        st.session_state.selected_items = []
                     st.success("Items fetched successfully!")
                 else:
                     st.warning(f"No items fetched from {selected_api}. Check the error messages above or try a different query or API.")
@@ -1212,7 +1237,11 @@ def main():
         with st.sidebar:
             st.header("Telegram Actions")
             if st.button("Reset Selection"):
-                st.session_state.selected_items = []
+                if not isinstance(st.session_state.selected_items, list):
+                    logger.error(f"st.session_state.selected_items is not a list before reset: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                    st.session_state.selected_items = []
+                else:
+                    st.session_state.selected_items = []
                 st.success("Selection reset successfully!")
                 logger.info("Selection reset by user.")
             
@@ -1221,7 +1250,10 @@ def main():
                 logger.error(f"st.session_state.selected_items is not a list before Telegram button: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                 st.session_state.selected_items = []
             logger.info(f"Before len() in Telegram button - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
-            if st.button("Send Selected Items to Telegram", disabled=len(st.session_state.selected_items) == 0):
+            selected_items_len = len(st.session_state.selected_items)
+            logger.info(f"After len() in Telegram button - selected_items_len: {selected_items_len}")
+            
+            if st.button("Send Selected Items to Telegram", disabled=selected_items_len == 0):
                 with st.spinner("Sending to Telegram..."):
                     success_count = 0
                     fail_count = 0
@@ -1237,6 +1269,11 @@ def main():
                     
                     st.info(f"Sending to Chat ID: {target_chat_id}")
                     logger.info(f"Sending {len(st.session_state.selected_items)} items to {target_chat_id}")
+                    
+                    # Ensure selected_items is a list before iterating
+                    if not isinstance(st.session_state.selected_items, list):
+                        logger.error(f"st.session_state.selected_items is not a list before Telegram send loop: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+                        st.session_state.selected_items = []
                     
                     for item in st.session_state.selected_items:
                         try:
@@ -1302,8 +1339,10 @@ def main():
                     logger.error(f"st.session_state.selected_items is not a list in info message: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
                     st.session_state.selected_items = []
                 logger.info(f"Before len() in info message - selected_items: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
-                st.info(f"Select {len(st.session_state.selected_items)} item(s) to send to Telegram")
-                logger.info(f"No items selected for sending. Current count: {len(st.session_state.selected_items)}")
+                selected_items_len = len(st.session_state.selected_items)
+                logger.info(f"After len() in info message - selected_items_len: {selected_items_len}")
+                st.info(f"Select {selected_items_len} item(s) to send to Telegram")
+                logger.info(f"No items selected for sending. Current count: {selected_items_len}")
 
         if st.session_state.items and isinstance(st.session_state.items, list):
             with st.sidebar:
@@ -1334,6 +1373,10 @@ def main():
         logger.error(error_msg)
         st.error(error_msg)
         send_error_email(error_msg)
+        # Reset selected_items to a list if an error occurs
+        if not isinstance(st.session_state.selected_items, list):
+            logger.error(f"Resetting st.session_state.selected_items after error: {st.session_state.selected_items}, Type: {type(st.session_state.selected_items)}")
+            st.session_state.selected_items = []
 
 if __name__ == "__main__":
     main()
