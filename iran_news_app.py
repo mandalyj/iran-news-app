@@ -605,7 +605,7 @@ def extract_article_content(url):
         logger.info(f"Extracted content: {content[:100]}...")
         return truncate_text(content, max_length=500)
     except Exception as e:
-        logger.error(f"Error extracting content from {url): {str(e)}")
+        logger.error(f"Error extracting content from {url}: {str(e)}")  # خط اصلاح‌شده
         return "Unable to extract content"
 
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
