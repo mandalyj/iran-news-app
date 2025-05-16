@@ -450,48 +450,42 @@ def fetch_custom_scraped_news(max_records=20):
                 response = requests.get(source["url"], timeout=10, headers=headers)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
-                # سلکتورهای خاص‌تر برای crypto.news
-                articles = (
-                    soup.select("div.post, div.article-card, div.news-post") or  # کلاس‌های خاص crypto.news
-                    soup.find_all("article", class_=["post", "story", "article", "news"]) or
-                    soup.find_all("div", class_=["post-item", "story-body", "article-content", "news-item"]) or
-                    soup.select("h3.post-title a, h2.headline a, a.title") or  # تیترهای خاص
-                    soup.find_all(["h2", "h3"], class_=["title", "headline"])
-                )
+                # یافتن همه مقالات در صفحه اصلی
+                articles = soup.find_all("article")
                 if not articles:
                     logger.warning(f"No articles found in {source['url']} with current selectors. HTML sample: {soup.text[:200]}...")
+                    logger.info(f"Sample HTML structure: {str(soup.find('body')[:500])}...")
                     continue
+                logger.info(f"Found {len(articles)} potential articles")
                 for article in articles[:max_records]:
-                    # بررسی ساختار مقاله
-                    title_elem = (
-                        article.find(["h1", "h2", "h3"], class_=["post-title", "title", "headline"]) or
-                        article.find("a", class_=["post-title", "title", "headline"])
-                    )
+                    # استخراج عنوان
+                    title_elem = article.find("h2")
+                    title = title_elem.text.strip() if title_elem else "No title"
+                    # استخراج خلاصه
+                    description_elem = article.find("p")
+                    description = description_elem.text.strip() if description_elem else "No description"
+                    # استخراج لینک مقاله
                     link_elem = article.find("a", href=True)
-                    description_elem = article.find("p", class_=["summary", "description", "content", "excerpt"])
-                    # اگر article خود یک لینک باشد (مثل <a class="title">)
-                    if not title_elem and article.name == "a":
-                        title_elem = article
-                    if not link_elem and article.name == "a" and article.get("href"):
-                        link_elem = article
-                    # تصحیح URL
                     article_url = (
                         link_elem["href"] if link_elem and link_elem["href"].startswith("http") else
                         source["url"].rstrip("/") + "/" + link_elem["href"].lstrip("/") if link_elem else
                         source["url"]
                     )
+                    # استخراج تصویر
+                    image_elem = article.find("img", src=True)
+                    image_url = image_elem["src"] if image_elem else ""
                     news_items.append({
-                        "title": title_elem.text.strip() if title_elem else "No title",
+                        "title": title,
                         "url": article_url,
                         "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "description": description_elem.text.strip() if description_elem else "No description",
-                        "image_url": "",
+                        "description": description,
+                        "image_url": image_url,
                         "translated_title": "",
                         "translated_description": "",
                         "source": source["name"],
                         "type": "news"
                     })
-                    logger.info(f"Successfully scraped article: {title_elem.text.strip() if title_elem else 'No title'}")
+                    logger.info(f"Successfully scraped article: {title}")
         except Exception as e:
             logger.error(f"Error scraping {source['name']} ({source['url']}): {str(e)}")
     return news_items[:max_records]
