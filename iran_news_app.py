@@ -721,8 +721,7 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
 def update_selected_items(action, item=None):
     if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
         st.session_state.selected_items = []
-        logger.info("Initialized selec
-ted_items as an empty list")
+        logger.info("Initialized selected_items as an empty list")
     if action == "add" and item:
         st.session_state.selected_items.append(item)
         logger.info(f"Adding item: {item.get('title', item.get('symbol'))}")
@@ -816,7 +815,7 @@ def save_items_to_file_for_download(items, format="csv"):
             df.to_csv(buffer, index=False)
             return buffer.getvalue()
         elif format == "json":
-            return json.dumps(items, indent=2)
+            return json.dumps(items, indent=2).encode()
         return None
     except Exception as e:
         logger.error(f"Error saving items for download: {str(e)}")
