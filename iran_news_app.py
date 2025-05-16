@@ -10,11 +10,11 @@ import json
 import os
 from bs4 import BeautifulSoup
 
-# تنظیم لاگ
+# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# ذخیره لاگ در حافظه برای نمایش در رابط کاربری
+# Store logs in memory for display in the UI
 log_stream = []
 class LogHandler(logging.Handler):
     def emit(self, record):
@@ -25,7 +25,7 @@ log_handler = LogHandler()
 log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logger.addHandler(log_handler)
 
-# تنظیمات
+# Configuration
 GNEWS_API_URL = "https://gnews.io/api/v4/search"
 GNEWS_API_KEY = os.environ.get("GNEWS_API_KEY", "YOUR_GNEWS_API_KEY")
 WORLDNEWS_API_URL = "https://api.worldnewsapi.com/search-news"
@@ -43,10 +43,10 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
 
-# تنظیمات صفحه Streamlit
-st.set_page_config(page_title="تجمیع‌کننده اخبار ایران", page_icon="📰", layout="wide")
+# Streamlit page configuration
+st.set_page_config(page_title="Iran News Aggregator", page_icon="📰", layout="wide")
 
-# CSS سفارشی
+# Custom CSS
 st.markdown(
     """
     <style>
@@ -55,7 +55,7 @@ st.markdown(
     .article-section { margin-bottom: 20px; padding: 0px; background-color: #f9f9f9; }
     .report-section { margin-bottom: 20px; padding: 10px; background-color: #e6f3ff; border-radius: 5px; }
     .neon-line-top { height: 4px; background: linear-gradient(90deg, rgba(255, 0, 0, 0.8), rgba(255, 100, 100, 0.8), rgba(255, 0, 0, 0.8)); box-shadow: 0 0 10px rgba(255, 0, 0, 0.7); margin: 10px 0; }
-    .title-link { font-size: 20px !important; font-weight: bold !important; color: #1a73e8 !important; margin-bottom: 2px !important; direction: rtl !important; text-decoration: none !important; font-family: "B Nazanin", sans-serif !important; }
+    .title-link { font-size: 20px !important; font-weight: bold !important; color: #1a73e8 !important; margin-bottom: 2px !important; direction: ltr !important; text-decoration: none !important; font-family: "Arial", sans-serif !important; }
     .source-date { font-size: 14px !important; color: #555 !important; margin-bottom: 10px !important; }
     .description { margin-top: 10px !important; line-height: 1.5 !important; }
     </style>
@@ -64,59 +64,59 @@ st.markdown(
 )
 
 def send_error_email(error_message):
-    logger.info(f"ارسال ایمیل خطا غیرفعال است: {error_message}")
+    logger.info(f"Error email sending is disabled: {error_message}")
 
 def load_articles_from_file():
     try:
         if os.path.exists(TEMP_FILE):
             with open(TEMP_FILE, "r") as f:
                 data = json.load(f)
-                logger.info(f"بارگذاری {len(data)} مقاله از {TEMP_FILE}")
+                logger.info(f"Loaded {len(data)} articles from {TEMP_FILE}")
                 return data
-        logger.info(f"فایل {TEMP_FILE} وجود ندارد")
+        logger.info(f"File {TEMP_FILE} does not exist")
         return []
     except Exception as e:
-        logger.error(f"خطا در بارگذاری مقالات: {str(e)}")
-        send_error_email(f"خطا در بارگذاری مقالات: {str(e)}")
+        logger.error(f"Error loading articles: {str(e)}")
+        send_error_email(f"Error loading articles: {str(e)}")
         return []
 
 def save_articles_to_file(articles):
     try:
         with open(TEMP_FILE, "w") as f:
             json.dump(articles, f)
-        logger.info(f"ذخیره {len(articles)} مقاله در {TEMP_FILE}")
+        logger.info(f"Saved {len(articles)} articles to {TEMP_FILE}")
     except Exception as e:
-        logger.error(f"خطا در ذخیره مقالات: {str(e)}")
-        send_error_email(f"خطا در ذخیره مقالات: {str(e)}")
+        logger.error(f"Error saving articles: {str(e)}")
+        send_error_email(f"Error saving articles: {str(e)}")
 
 def load_chat_ids():
     try:
         if os.path.exists(CHAT_IDS_FILE):
             with open(CHAT_IDS_FILE, "r") as f:
                 data = json.load(f)
-                logger.info(f"بارگذاری شناسه‌های چت: {data}")
+                logger.info(f"Loaded chat IDs: {data}")
                 return data
-        logger.info(f"فایل {CHAT_IDS_FILE} وجود ندارد")
+        logger.info(f"File {CHAT_IDS_FILE} does not exist")
         return {}
     except Exception as e:
-        logger.error(f"خطا در بارگذاری شناسه‌های چت: {str(e)}")
-        send_error_email(f"خطا در بارگذاری شناسه‌های چت: {str(e)}")
+        logger.error(f"Error loading chat IDs: {str(e)}")
+        send_error_email(f"Error loading chat IDs: {str(e)}")
         return {}
 
 def save_chat_ids(chat_ids):
     try:
         with open(CHAT_IDS_FILE, "w") as f:
             json.dump(chat_ids, f)
-        logger.info(f"ذخیره شناسه‌های چت: {chat_ids}")
+        logger.info(f"Saved chat IDs: {chat_ids}")
     except Exception as e:
-        logger.error(f"خطا در ذخیره شناسه‌های چت: {str(e)}")
-        send_error_email(f"خطا در ذخیره شناسه‌های چت: {str(e)}")
+        logger.error(f"Error saving chat IDs: {str(e)}")
+        send_error_email(f"Error saving chat IDs: {str(e)}")
 
 def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     if GNEWS_API_KEY == "YOUR_GNEWS_API_KEY":
-        logger.error("کلید API GNews نامعتبر است")
-        st.error("کلید API GNews نامعتبر است")
-        return [], "کلید API نامعتبر"
+        logger.error("GNews API key is invalid")
+        st.error("GNews API key is invalid")
+        return [], "Invalid API key"
     
     params = {
         "q": query, "apikey": GNEWS_API_KEY, "lang": "en", "country": "us",
@@ -124,40 +124,40 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
     }
     headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
     try:
-        logger.info(f"در حال ارسال درخواست به GNews با پارامترها: {params}")
+        logger.info(f"Sending request to GNews with params: {params}")
         response = requests.get(GNEWS_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ GNews: {data}")
+        logger.info(f"GNews response: {data}")
         if "errors" in data:
-            logger.error(f"خطای API GNews: {data['errors']}")
-            st.error(f"خطای API GNews: {data['errors']}")
+            logger.error(f"GNews API error: {data['errors']}")
+            st.error(f"GNews API error: {data['errors']}")
             return [], data['errors']
         articles = data.get("articles", [])
         if not articles:
-            logger.warning(f"هیچ مقاله‌ای برای '{query}' در GNews یافت نشد")
-            st.warning(f"هیچ مقاله‌ای برای '{query}' در GNews یافت نشد")
-            return [], "هیچ مقاله‌ای یافت نشد"
+            logger.warning(f"No articles found for '{query}' on GNews")
+            st.warning(f"No articles found for '{query}' on GNews")
+            return [], "No articles found"
         formatted_articles = [
             {
-                "title": a.get("title", "بدون عنوان"), "url": a.get("url", ""),
-                "source": a.get("source", {}).get("name", "منبع ناشناس"),
-                "published_at": a.get("publishedAt", ""), "description": a.get("description", "") or "بدون توضیحات",
+                "title": a.get("title", "No title"), "url": a.get("url", ""),
+                "source": a.get("source", {}).get("name", "Unknown source"),
+                "published_at": a.get("publishedAt", ""), "description": a.get("description", "") or "No description",
                 "image_url": a.get("image", ""), "translated_title": "", "translated_description": "", "type": "news"
             } for a in articles
         ]
-        logger.info(f"دریافت {len(formatted_articles)} مقاله از GNews: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from GNews: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
-        logger.error(f"خطا در دریافت از GNews: {str(e)}")
-        st.error(f"خطا در دریافت از GNews: {str(e)}")
+        logger.error(f"Error fetching from GNews: {str(e)}")
+        st.error(f"Error fetching from GNews: {str(e)}")
         return [], str(e)
 
 def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     if WORLDNEWS_API_KEY == "YOUR_WORLDNEWS_API_KEY":
-        logger.error("کلید API World News نامعتبر است")
-        st.error("کلید API World News نامعتبر است")
-        return [], "کلید API نامعتبر"
+        logger.error("World News API key is invalid")
+        st.error("World News API key is invalid")
+        return [], "Invalid API key"
     
     params = {
         "text": query, "api-key": WORLDNEWS_API_KEY, "language": "en",
@@ -166,33 +166,33 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
     }
     headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
     try:
-        logger.info(f"در حال ارسال درخواست به World News با پارامترها: {params}")
+        logger.info(f"Sending request to World News with params: {params}")
         response = requests.get(WORLDNEWS_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ World News: {data}")
+        logger.info(f"World News response: {data}")
         if "error" in data:
-            logger.error(f"خطای API World News: {data.get('error')}")
-            st.error(f"خطای API World News: {data.get('error')}")
+            logger.error(f"World News API error: {data.get('error')}")
+            st.error(f"World News API error: {data.get('error')}")
             return [], data.get('error')
         articles = data.get("news", [])
         if not articles:
-            logger.warning(f"هیچ مقاله‌ای برای '{query}' در World News API یافت نشد")
-            st.warning(f"هیچ مقاله‌ای برای '{query}' در World News API یافت نشد")
-            return [], "هیچ مقاله‌ای یافت نشد"
+            logger.warning(f"No articles found for '{query}' on World News API")
+            st.warning(f"No articles found for '{query}' on World News API")
+            return [], "No articles found"
         formatted_articles = [
             {
-                "title": a.get("title", "بدون عنوان"), "url": a.get("url", ""),
-                "source": a.get("source", "منبع ناشناس"), "published_at": a.get("publish_date", ""),
-                "description": a.get("text", "") or "بدون توضیحات", "image_url": a.get("image", ""),
+                "title": a.get("title", "No title"), "url": a.get("url", ""),
+                "source": a.get("source", "Unknown source"), "published_at": a.get("publish_date", ""),
+                "description": a.get("text", "") or "No description", "image_url": a.get("image", ""),
                 "translated_title": "", "translated_description": "", "type": "news"
             } for a in articles
         ]
-        logger.info(f"دریافت {len(formatted_articles)} مقاله از World News API: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from World News API: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
-        logger.error(f"خطا در دریافت از World News API: {str(e)}")
-        st.error(f"خطا در دریافت از World News API: {str(e)}")
+        logger.error(f"Error fetching from World News API: {str(e)}")
+        st.error(f"Error fetching from World News API: {str(e)}")
         return [], str(e)
 
 def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None, to_date=None):
@@ -204,16 +204,16 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
     for attempt in range(retries):
         try:
             time.sleep(delay)
-            logger.info(f"در حال ارسال درخواست به CoinGecko با پارامترها: {params}")
+            logger.info(f"Sending request to CoinGecko with params: {params}")
             response = requests.get(endpoint, params=params, headers=headers, timeout=15)
             response.raise_for_status()
             data = response.json()
-            logger.info(f"پاسخ CoinGecko: {data}")
+            logger.info(f"CoinGecko response: {data}")
             articles = data.get("data", [])
             if not articles:
-                logger.warning(f"هیچ مقاله‌ای برای '{query}' در CoinGecko یافت نشد")
-                st.warning(f"هیچ مقاله‌ای برای '{query}' در CoinGecko یافت نشد")
-                return [], "هیچ مقاله‌ای یافت نشد"
+                logger.warning(f"No articles found for '{query}' on CoinGecko")
+                st.warning(f"No articles found for '{query}' on CoinGecko")
+                return [], "No articles found"
             formatted_articles = []
             for a in articles:
                 published_at = a.get("published_at", "")
@@ -226,49 +226,49 @@ def fetch_coingecko_news(query="cryptocurrency", max_records=20, from_date=None,
                     if not (start_datetime <= article_date <= end_datetime):
                         continue
                 formatted_articles.append({
-                    "title": a.get("title", "بدون عنوان"), "url": a.get("url", ""),
+                    "title": a.get("title", "No title"), "url": a.get("url", ""),
                     "source": a.get("source", "CoinGecko"), "published_at": published_at,
-                    "description": a.get("description", "") or "بدون توضیحات", "image_url": a.get("thumb", ""),
+                    "description": a.get("description", "") or "No description", "image_url": a.get("thumb", ""),
                     "translated_title": "", "translated_description": "", "type": "news"
                 })
-            logger.info(f"دریافت {len(formatted_articles)} مقاله از CoinGecko: {formatted_articles}")
+            logger.info(f"Fetched {len(formatted_articles)} articles from CoinGecko: {formatted_articles}")
             return formatted_articles, None
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429 and attempt < retries - 1:
-                logger.warning(f"محدودیت نرخ، تلاش مجدد پس از {delay} ثانیه...")
+                logger.warning(f"Rate limit exceeded, retrying after {delay} seconds...")
                 delay *= 2
                 continue
-            logger.error(f"خطا در دریافت از CoinGecko: {str(e)}")
-            st.error(f"خطا در دریافت از CoinGecko: {str(e)}")
+            logger.error(f"Error fetching from CoinGecko: {str(e)}")
+            st.error(f"Error fetching from CoinGecko: {str(e)}")
             return [], str(e)
         except Exception as e:
-            logger.error(f"خطا در دریافت از CoinGecko: {str(e)}")
-            st.error(f"خطا در دریافت از CoinGecko: {str(e)}")
+            logger.error(f"Error fetching from CoinGecko: {str(e)}")
+            st.error(f"Error fetching from CoinGecko: {str(e)}")
             return [], str(e)
 
 def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
     if FMP_API_KEY == "YOUR_FMP_API_KEY":
-        logger.error("کلید API FMP نامعتبر است")
-        st.error("کلید API FMP نامعتبر است")
-        return [], "کلید API نامعتبر"
+        logger.error("FMP API key is invalid")
+        st.error("FMP API key is invalid")
+        return [], "Invalid API key"
     
     endpoint = f"{FMP_API_URL}/income-statement/{symbol}"
     headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
     params = {"limit": max_records, "apikey": FMP_API_KEY}
     try:
-        logger.info(f"در حال ارسال درخواست به FMP با پارامترها: {params}")
+        logger.info(f"Sending request to FMP with params: {params}")
         response = requests.get(endpoint, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ FMP: {data}")
+        logger.info(f"FMP response: {data}")
         if not isinstance(data, list):
-            logger.error(f"پاسخ غیرمنتظره از FMP: {data}")
-            st.error("پاسخ غیرمنتظره از FMP")
-            return [], "پاسخ غیرمنتظره"
+            logger.error(f"Unexpected response from FMP: {data}")
+            st.error("Unexpected response from FMP")
+            return [], "Unexpected response"
         if not data:
-            logger.warning(f"هیچ گزارشی برای '{symbol}' یافت نشد")
-            st.warning(f"هیچ گزارشی برای '{symbol}' یافت نشد")
-            return [], "هیچ گزارشی یافت نشد"
+            logger.warning(f"No reports found for '{symbol}'")
+            st.warning(f"No reports found for '{symbol}'")
+            return [], "No reports found"
         reports = []
         for report in data:
             report_date = report.get("date", "")
@@ -288,18 +288,18 @@ def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
                 "operatingIncome": report.get("operatingIncome", 0),
                 "reportedCurrency": report.get("reportedCurrency", "USD"), "type": "report"
             })
-        logger.info(f"دریافت {len(reports)} گزارش برای {symbol}: {reports}")
+        logger.info(f"Fetched {len(reports)} reports for {symbol}: {reports}")
         return reports, None
     except Exception as e:
-        logger.error(f"خطا در دریافت از FMP: {str(e)}")
-        st.error(f"خطا در دریافت از FMP: {str(e)}")
+        logger.error(f"Error fetching from FMP: {str(e)}")
+        st.error(f"Error fetching from FMP: {str(e)}")
         return [], str(e)
 
 def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date=None):
     if CURRENTSAPI_API_KEY == "YOUR_CURRENTSAPI_API_KEY":
-        logger.error("کلید API CurrentsAPI نامعتبر است")
-        st.error("کلید API CurrentsAPI نامعتبر است")
-        return [], "کلید API نامعتبر"
+        logger.error("CurrentsAPI API key is invalid")
+        st.error("CurrentsAPI API key is invalid")
+        return [], "Invalid API key"
     
     params = {"keywords": query, "apiKey": CURRENTSAPI_API_KEY, "language": "en", "limit": min(max_records, 100)}
     if from_date:
@@ -308,38 +308,38 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
         params["end_date"] = to_date
     headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
     try:
-        logger.info(f"در حال ارسال درخواست به CurrentsAPI با پارامترها: {params}")
+        logger.info(f"Sending request to CurrentsAPI with params: {params}")
         response = requests.get(CURRENTSAPI_API_URL, params=params, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ CurrentsAPI: {data}")
+        logger.info(f"CurrentsAPI response: {data}")
         if data.get("status") == "error":
-            logger.error(f"خطای API CurrentsAPI: {data.get('message')}")
-            st.error(f"خطای API CurrentsAPI: {data.get('message')}")
+            logger.error(f"CurrentsAPI API error: {data.get('message')}")
+            st.error(f"CurrentsAPI API error: {data.get('message')}")
             return [], data.get('message')
         news = data.get("news", [])
         if not news:
-            logger.warning(f"هیچ مقاله‌ای برای '{query}' در CurrentsAPI یافت نشد")
-            st.warning(f"هیچ مقاله‌ای برای '{query}' در CurrentsAPI یافت نشد")
-            return [], "هیچ مقاله‌ای یافت نشد"
+            logger.warning(f"No articles found for '{query}' on CurrentsAPI")
+            st.warning(f"No articles found for '{query}' on CurrentsAPI")
+            return [], "No articles found"
         formatted_articles = [
             {
-                "title": article.get("title", "بدون عنوان"), "url": article.get("url", ""),
-                "source": article.get("source", {}).get("name", "منبع ناشناس"),
-                "published_at": article.get("published", ""), "description": article.get("description", "") or "بدون توضیحات",
+                "title": article.get("title", "No title"), "url": article.get("url", ""),
+                "source": article.get("source", {}).get("name", "Unknown source"),
+                "published_at": article.get("published", ""), "description": article.get("description", "") or "No description",
                 "image_url": article.get("image", ""), "translated_title": "", "translated_description": "", "type": "news"
             } for article in news
         ]
-        logger.info(f"دریافت {len(formatted_articles)} مقاله از CurrentsAPI: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from CurrentsAPI: {formatted_articles}")
         return formatted_articles, None
     except Exception as e:
-        logger.error(f"خطا در دریافت از CurrentsAPI: {str(e)}")
-        st.error(f"خطا در دریافت از CurrentsAPI: {str(e)}")
+        logger.error(f"Error fetching from CurrentsAPI: {str(e)}")
+        st.error(f"Error fetching from CurrentsAPI: {str(e)}")
         return [], str(e)
 
 def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
     try:
-        logger.info(f"دریافت از {selected_api}: query={query}, max_records={max_records}, from_date={from_date}, to_date={to_date}")
+        logger.info(f"Fetching from {selected_api}: query={query}, max_records={max_records}, from_date={from_date}, to_date={to_date}")
         api_functions = {
             "GNews": fetch_gnews, "World News API": fetch_worldnews,
             "CoinGecko (Crypto News)": fetch_coingecko_news, "Financial Report (FMP)": fetch_financial_report,
@@ -347,40 +347,40 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         }
         fetch_function = api_functions.get(selected_api)
         if not fetch_function:
-            logger.error(f"API نامعتبر: {selected_api}")
-            st.error(f"API نامعتبر: {selected_api}")
+            logger.error(f"Invalid API: {selected_api}")
+            st.error(f"Invalid API: {selected_api}")
             return []
         fetch_query = query if selected_api != "Financial Report (FMP)" else query.upper()
         items, error = fetch_function(fetch_query, max_records, from_date, to_date)
         if not isinstance(items, list):
-            logger.error(f"دریافت لیست نشد: {items}")
-            st.error("دریافت لیست نشد")
+            logger.error(f"Did not receive a list: {items}")
+            st.error("Did not receive a list")
             return []
         if error:
-            logger.error(f"خطا در {selected_api}: {error}")
+            logger.error(f"Error in {selected_api}: {error}")
             st.error(f"{selected_api}: {error}")
         if items:
             if selected_api != "Financial Report (FMP)":
                 seen_urls = set()
                 unique_items = [item for item in items if item["url"] not in seen_urls and not seen_urls.add(item["url"])]
                 items = unique_items[:max_records]
-            logger.info(f"دریافت {len(items)} مورد از {selected_api}: {items}")
-            st.success(f"دریافت {len(items)} مورد از {selected_api}")
+            logger.info(f"Fetched {len(items)} items from {selected_api}: {items}")
+            st.success(f"Fetched {len(items)} items from {selected_api}")
         else:
-            logger.warning(f"هیچ موردی از {selected_api} دریافت نشد")
-            st.warning(f"هیچ موردی از {selected_api} دریافت نشد")
+            logger.warning(f"No items fetched from {selected_api}")
+            st.warning(f"No items fetched from {selected_api}")
         return items
     except Exception as e:
-        logger.error(f"خطا در fetch_news: {str(e)}")
-        st.error(f"خطا در fetch_news: {str(e)}")
+        logger.error(f"Error in fetch_news: {str(e)}")
+        st.error(f"Error in fetch_news: {str(e)}")
         return []
 
 def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT):
     if not text:
         return text
     if AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
-        logger.error("کلید API Avalai نامعتبر است")
-        st.error("کلید API Avalai نامعتبر است")
+        logger.error("Avalai API key is invalid")
+        st.error("Avalai API key is invalid")
         return text
     endpoint = f"{avalai_api_url}/chat/completions"
     headers = {
@@ -393,26 +393,26 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "messages": [{"role": "user", "content": f"Translate this text from {source_lang} to {target_lang}: {text}"}]
     }
     try:
-        logger.info(f"در حال ارسال درخواست ترجمه به Avalai: {text}")
+        logger.info(f"Sending translation request to Avalai: {text}")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ Avalai: {data}")
+        logger.info(f"Avalai response: {data}")
         if "choices" in data and data["choices"]:
             translated_text = data["choices"][0]["message"]["content"]
-            logger.info(f"متن ترجمه‌شده: {translated_text}")
+            logger.info(f"Translated text: {translated_text}")
             return translated_text
-        logger.warning(f"پاسخ API Avalai بدون انتخاب: {data}")
-        st.warning("مشکل در پاسخ API Avalai")
+        logger.warning(f"Avalai API response has no choices: {data}")
+        st.warning("Issue with Avalai API response")
         return text
     except Exception as e:
-        logger.error(f"خطا در ترجمه: {str(e)}")
-        st.error(f"خطا در ترجمه: {str(e)}")
+        logger.error(f"Error in translation: {str(e)}")
+        st.error(f"Error in translation: {str(e)}")
         return text
 
 def parse_to_tehran_time(utc_time_str):
     if not utc_time_str:
-        logger.warning("زمان UTC خالی است")
+        logger.warning("UTC time is empty")
         return None
     time_formats = [
         "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
@@ -423,11 +423,11 @@ def parse_to_tehran_time(utc_time_str):
         try:
             utc_time = datetime.strptime(utc_time_str, time_format)
             tehran_time = utc_time + timedelta(hours=3, minutes=30)
-            logger.info(f"زمان UTC ({utc_time_str}) به زمان تهران تبدیل شد: {tehran_time}")
+            logger.info(f"UTC time ({utc_time_str}) converted to Tehran time: {tehran_time}")
             return tehran_time
         except ValueError:
             continue
-    logger.warning(f"خطا در تجزیه زمان: {utc_time_str}")
+    logger.warning(f"Error parsing time: {utc_time_str}")
     return None
 
 def format_tehran_time(tehran_time):
@@ -440,143 +440,143 @@ def truncate_text(text, max_length=100):
             return text_str[:max_length].rsplit(" ", 1)[0] + "..."
         return text_str
     except Exception as e:
-        logger.error(f"خطا در کوتاه کردن متن: {str(e)}")
+        logger.error(f"Error truncating text: {str(e)}")
         return str(text)
 
 def extract_article_content(url):
     try:
         headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
-        logger.info(f"در حال استخراج محتوا از URL: {url}")
+        logger.info(f"Extracting content from URL: {url}")
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         paragraphs = soup.find_all('p')
         content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
         if not content:
-            logger.warning(f"هیچ محتوایی از {url} استخراج نشد")
-            return "محتوا در دسترس نیست"
-        logger.info(f"محتوای استخراج‌شده: {content[:100]}...")
+            logger.warning(f"No content extracted from {url}")
+            return "Content not available"
+        logger.info(f"Extracted content: {content[:100]}...")
         return truncate_text(content, max_length=500)
     except Exception as e:
-        logger.error(f"خطا در استخراج محتوا از {url}: {str(e)}")
-        return "ناتوان در استخراج محتوا"
+        logger.error(f"Error extracting content from {url}: {str(e)}")
+        return "Unable to extract content"
 
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
     if not items or not isinstance(items, list):
-        logger.warning("لیست مقالات خالی است یا معتبر نیست")
+        logger.warning("Article list is empty or invalid")
         return []
     if items[0].get("type") == "report":
-        logger.info("مقالات از نوع گزارش هستند، فیلتر زمانی اعمال نمی‌شود")
+        logger.info("Articles are reports, time filter not applied")
         return items
     if disable_filter:
-        logger.info("فیلتر زمانی غیرفعال است")
+        logger.info("Time filter is disabled")
         return items
     filtered_items = []
     current_tehran_time = datetime.utcnow() + timedelta(hours=3, minutes=30)
-    logger.info(f"زمان فعلی تهران: {current_tehran_time}")
+    logger.info(f"Current Tehran time: {current_tehran_time}")
     try:
         if time_range_hours == float("inf"):
             start_datetime = datetime.combine(start_date, datetime.min.time()) + timedelta(hours=3, minutes=30)
             end_datetime = datetime.combine(end_date, datetime.max.time()) + timedelta(hours=3, minutes=30)
-            logger.info(f"فیلتر زمانی: از {start_datetime} تا {end_datetime}")
+            logger.info(f"Time filter: from {start_datetime} to {end_datetime}")
             for item in items:
                 published_time = parse_to_tehran_time(item["published_at"])
                 if published_time and start_datetime <= published_time <= end_datetime:
                     filtered_items.append(item)
                 else:
-                    logger.info(f"مقاله فیلتر شد (خارج از بازه زمانی): {item.get('title', 'بدون عنوان')}")
+                    logger.info(f"Article filtered (outside time range): {item.get('title', 'No title')}")
         else:
             cutoff_time = current_tehran_time - timedelta(hours=time_range_hours)
-            logger.info(f"فیلتر زمانی: مقالات بعد از {cutoff_time}")
+            logger.info(f"Time filter: articles after {cutoff_time}")
             for item in items:
                 published_time = parse_to_tehran_time(item["published_at"])
                 if published_time and published_time >= cutoff_time:
                     filtered_items.append(item)
                 else:
-                    logger.info(f"مقاله فیلتر شد (قدیمی‌تر از بازه زمانی): {item.get('title', 'بدون عنوان')}")
-        logger.info(f"فیلتر {len(filtered_items)} مورد از {len(items)} باقی ماند")
+                    logger.info(f"Article filtered (older than time range): {item.get('title', 'No title')}")
+        logger.info(f"Filtered {len(filtered_items)} items out of {len(items)}")
         return filtered_items
     except Exception as e:
-        logger.error(f"خطا در فیلتر مقالات: {str(e)}")
-        st.error(f"خطا در فیلتر مقالات: {str(e)}")
+        logger.error(f"Error filtering articles: {str(e)}")
+        st.error(f"Error filtering articles: {str(e)}")
         return items
 
 def pre_process_articles(items, avalai_api_url, enable_translation=False, num_items_to_translate=1):
     if not items or not isinstance(items, list):
-        logger.warning("لیست مقالات برای پیش‌پردازش خالی است")
+        logger.warning("Article list for preprocessing is empty")
         return []
     if items[0].get("type") == "report":
-        logger.info("مقالات از نوع گزارش هستند، پیش‌پردازش اعمال نمی‌شود")
+        logger.info("Articles are reports, preprocessing not applied")
         return items
     try:
         sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
-        logger.info(f"مرتب‌سازی مقالات: {len(sorted_items)} مورد")
+        logger.info(f"Sorted articles: {len(sorted_items)} items")
         for i, item in enumerate(sorted_items):
             if enable_translation and i < num_items_to_translate:
-                logger.info(f"ترجمه مقاله {i+1}: {item['title']}")
+                logger.info(f"Translating article {i+1}: {item['title']}")
                 item["translated_title"] = translate_with_avalai(item["title"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
                 item["translated_description"] = translate_with_avalai(item["description"], source_lang="en", target_lang="fa", avalai_api_url=avalai_api_url)
             else:
                 item["translated_title"] = item["title"]
                 item["translated_description"] = item["description"]
-        logger.info(f"پیش‌پردازش مقالات انجام شد: {sorted_items}")
+        logger.info(f"Preprocessed articles: {sorted_items}")
         return sorted_items
     except Exception as e:
-        logger.error(f"خطا در پیش‌پردازش مقالات: {str(e)}")
-        st.error(f"خطا در پیش‌پردازش مقالات: {str(e)}")
+        logger.error(f"Error preprocessing articles: {str(e)}")
+        st.error(f"Error preprocessing articles: {str(e)}")
         return items
 
 def update_selected_items(action, item=None):
     if not isinstance(st.session_state.selected_items, list):
-        logger.error(f"selected_items لیست نیست: {st.session_state.selected_items}, نوع: {type(st.session_state.selected_items)}")
+        logger.error(f"selected_items is not a list: {st.session_state.selected_items}, type: {type(st.session_state.selected_items)}")
         st.session_state.selected_items = []
     if action == "add" and item:
         st.session_state.selected_items.append(item)
-        logger.info(f"اضافه کردن مورد: {item.get('title', item.get('symbol'))}")
+        logger.info(f"Adding item: {item.get('title', item.get('symbol'))}")
     elif action == "remove" and item:
         st.session_state.selected_items = [x for x in st.session_state.selected_items if x.get('url') != item['url']]
-        logger.info(f"حذف مورد: {item.get('title', item.get('symbol'))}")
+        logger.info(f"Removing item: {item.get('title', item.get('symbol'))}")
     elif action == "clear":
         st.session_state.selected_items = []
-        logger.info("پاکسازی موارد انتخاب‌شده")
+        logger.info("Cleared selected items")
 
 def display_items(items):
     try:
         if not items or not isinstance(items, list):
-            logger.warning("هیچ موردی برای نمایش وجود ندارد: لیست خالی است")
-            st.warning("هیچ موردی برای نمایش وجود ندارد")
+            logger.warning("No items to display: list is empty")
+            st.warning("No items to display")
             return
-        logger.info(f"در حال نمایش {len(items)} مورد: {items}")
+        logger.info(f"Displaying {len(items)} items: {items}")
         item_type = items[0].get("type", "news")
         if item_type == "news":
             sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
-            logger.info(f"مرتب‌سازی مقالات برای نمایش: {len(sorted_items)} مورد")
-            st.subheader("آمار اخبار")
+            logger.info(f"Sorted articles for display: {len(sorted_items)} items")
+            st.subheader("News Statistics")
             sources = pd.DataFrame([item["source"] for item in sorted_items]).value_counts().reset_index()
-            sources.columns = ["منبع", "تعداد"]
+            sources.columns = ["Source", "Count"]
             if len(sources) > 1:
                 col1, col2 = st.columns(2)
                 with col1:
-                    st.bar_chart(sources.set_index("منبع"))
+                    st.bar_chart(sources.set_index("Source"))
                 with col2:
                     st.dataframe(sources)
             else:
-                st.write(f"همه مقالات از: {sources.iloc[0, 0]}")
+                st.write(f"All articles from: {sources.iloc[0, 0]}")
             
-            st.subheader("مقالات انتخاب‌شده")
+            st.subheader("Selected Articles")
             if not isinstance(st.session_state.selected_items, list):
-                logger.error(f"selected_items لیست نیست: {st.session_state.selected_items}")
+                logger.error(f"selected_items is not a list: {st.session_state.selected_items}")
                 st.session_state.selected_items = []
-            st.write(f"شما {len(st.session_state.selected_items)} مقاله برای ارسال به تلگرام انتخاب کرده‌اید")
+            st.write(f"You have selected {len(st.session_state.selected_items)} articles for Telegram")
             
-            st.subheader("مقالات خبری")
+            st.subheader("News Articles")
             col1, col2 = st.columns(2)
             for i, item in enumerate(sorted_items):
                 current_col = col1 if i % 2 == 0 else col2
                 with current_col:
                     st.markdown('<div class="neon-line-top"></div>', unsafe_allow_html=True)
                     is_selected = any(a.get('url') == item['url'] for a in st.session_state.selected_items)
-                    if st.checkbox("انتخاب برای تلگرام", key=f"article_{i}", value=is_selected):
+                    if st.checkbox("Select for Telegram", key=f"article_{i}", value=is_selected):
                         if not is_selected:
                             update_selected_items("add", item)
                     else:
@@ -588,36 +588,36 @@ def display_items(items):
                     truncated_translated_description = truncate_text(item["translated_description"], max_length=100)
                     st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                     st.markdown(f'<h3 class="title-link"><a href="{item["url"]}" target="_blank">{item["translated_title"]}</a></h3>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="source-date">**منبع:** {item["source"]} | **انتشار:** {tehran_time_str}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="source-date">**Source:** {item["source"]} | **Published:** {tehran_time_str}</div>', unsafe_allow_html=True)
                     if item["image_url"]:
                         try:
                             st.image(item["image_url"], width=300)
                         except Exception:
-                            st.info("تصویر بارگذاری نشد")
-                    st.markdown(f'<div class="english-text description">**توضیحات (انگلیسی):** {truncated_description}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncated_translated_description}</div>', unsafe_allow_html=True)
+                            st.info("Image failed to load")
+                    st.markdown(f'<div class="english-text description">**Description (English):** {truncated_description}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="persian-text description">**Description (Translated):** {truncated_translated_description}</div>', unsafe_allow_html=True)
                     st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.subheader("گزارش‌های مالی")
+            st.subheader("Financial Reports")
             for report in items:
                 st.markdown('<div class="report-section">', unsafe_allow_html=True)
-                st.markdown(f"**نماد شرکت:** {report['symbol']}")
-                st.markdown(f"**تاریخ گزارش:** {report['date']}")
-                st.markdown(f"**ارز گزارش:** {report['reportedCurrency']}")
-                st.markdown(f"**درآمد:** {report['revenue']:,} {report['reportedCurrency']}")
-                st.markdown(f"**سود خالص:** {report['netIncome']:,} {report['reportedCurrency']}")
-                st.markdown(f"**سود هر سهم (EPS):** {report['eps']}")
-                st.markdown(f"**سود ناخالص:** {report['grossProfit']:,} {report['reportedCurrency']}")
-                st.markdown(f"**درآمد عملیاتی:** {report['operatingIncome']:,} {report['reportedCurrency']}")
+                st.markdown(f"**Company Symbol:** {report['symbol']}")
+                st.markdown(f"**Report Date:** {report['date']}")
+                st.markdown(f"**Reported Currency:** {report['reportedCurrency']}")
+                st.markdown(f"**Revenue:** {report['revenue']:,} {report['reportedCurrency']}")
+                st.markdown(f"**Net Income:** {report['netIncome']:,} {report['reportedCurrency']}")
+                st.markdown(f"**Earnings Per Share (EPS):** {report['eps']}")
+                st.markdown(f"**Gross Profit:** {report['grossProfit']:,} {report['reportedCurrency']}")
+                st.markdown(f"**Operating Income:** {report['operatingIncome']:,} {report['reportedCurrency']}")
                 st.markdown('</div>', unsafe_allow_html=True)
     except Exception as e:
-        logger.error(f"خطا در نمایش موارد: {str(e)}")
-        st.error(f"خطا در نمایش موارد: {str(e)}")
+        logger.error(f"Error displaying items: {str(e)}")
+        st.error(f"Error displaying items: {str(e)}")
 
 def save_items_to_file_for_download(items, format="csv"):
     try:
         if not items or not isinstance(items, list):
-            logger.warning("هیچ موردی برای ذخیره وجود ندارد")
+            logger.warning("No items to save")
             return None
         df = pd.DataFrame(items)
         if format == "csv":
@@ -628,7 +628,7 @@ def save_items_to_file_for_download(items, format="csv"):
             return json.dumps(items, indent=2)
         return None
     except Exception as e:
-        logger.error(f"خطا در ذخیره موارد برای دانلود: {str(e)}")
+        logger.error(f"Error saving items for download: {str(e)}")
         return None
 
 def send_telegram_message(chat_id, message, disable_web_page_preview=False):
@@ -637,35 +637,35 @@ def send_telegram_message(chat_id, message, disable_web_page_preview=False):
             message = message[:4093] + "..."
         url = f"{TELEGRAM_API_URL}/sendMessage"
         data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
-        logger.info(f"در حال ارسال پیام به تلگرام: {chat_id}")
+        logger.info(f"Sending message to Telegram: {chat_id}")
         response = requests.post(url, data=data, timeout=10)
         response.raise_for_status()
         result = response.json()
-        logger.info(f"پاسخ تلگرام: {result}")
+        logger.info(f"Telegram response: {result}")
         if result.get("ok"):
-            logger.info(f"پیام به {chat_id} ارسال شد")
-            return True, "پیام ارسال شد"
-        logger.error(f"خطای تلگرام: {result.get('description')}")
+            logger.info(f"Message sent to {chat_id}")
+            return True, "Message sent"
+        logger.error(f"Telegram error: {result.get('description')}")
         return False, result.get('description')
     except Exception as e:
-        logger.error(f"خطا در ارسال پیام تلگرام: {str(e)}")
+        logger.error(f"Error sending Telegram message: {str(e)}")
         return False, str(e)
 
 def get_chat_id_from_username(username, chat_ids):
     try:
         if not username.startswith("@"):
-            return None, "نام کاربری باید با @ شروع شود"
+            return None, "Username must start with @"
         username = username[1:].lower()
         if username in chat_ids:
             return chat_ids[username], None
         url = f"{TELEGRAM_API_URL}/getUpdates"
-        logger.info(f"در حال دریافت به‌روزرسانی‌های تلگرام برای یافتن شناسه چت")
+        logger.info(f"Fetching Telegram updates to find chat ID")
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         data = response.json()
-        logger.info(f"پاسخ به‌روزرسانی‌های تلگرام: {data}")
+        logger.info(f"Telegram updates response: {data}")
         if not data.get("ok"):
-            return None, "خطا در دریافت به‌روزرسانی‌های تلگرام"
+            return None, "Error fetching Telegram updates"
         for update in data.get("result", []):
             if "message" in update and "chat" in update["message"]:
                 chat = update["message"]["chat"]
@@ -680,120 +680,126 @@ def get_chat_id_from_username(username, chat_ids):
                         chat_ids[username] = chat_id
                         save_chat_ids(chat_ids)
                         return chat_id, None
-        return None, f"شناسه چت برای @{username} یافت نشد"
+        return None, f"Chat ID for @{username} not found"
     except Exception as e:
-        logger.error(f"خطا در دریافت شناسه چت برای {username}: {str(e)}")
+        logger.error(f"Error fetching chat ID for {username}: {str(e)}")
         return None, str(e)
 
 def main():
     try:
-        st.title("تجمیع‌کننده اخبار ایران")
+        st.title("Iran News Aggregator")
         
-        # مقداردهی اولیه حالت جلسه
+        # Initialize session state
         if 'selected_items' not in st.session_state or not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
-            logger.info("مقداردهی اولیه selected_items")
-        if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
+            logger.info("Initialized selected_items")
+        if 'items' not in st.session_state or not isinstance(st.session_state.get('items', []), list):
             st.session_state.items = load_articles_from_file()
-            logger.info(f"بارگذاری اولیه st.session_state.items: {st.session_state.items}")
+            logger.info(f"Initialized st.session_state.items: {st.session_state.items}")
         if 'chat_ids' not in st.session_state:
             st.session_state.chat_ids = load_chat_ids()
         if 'avalai_api_url' not in st.session_state:
             st.session_state.avalai_api_url = AVALAI_API_URL_DEFAULT
         
         with st.sidebar:
-            st.header("تنظیمات جستجو")
-            query = st.text_input("جستجوی عبارت (یا نماد شرکت برای گزارش مالی)", value="Iran")
+            st.header("Search Settings")
+            query = st.text_input("Search query (or company symbol for financial reports)", value="Iran")
             today = datetime(2025, 5, 15)
             default_start_date = today - timedelta(days=7)
-            start_date = st.date_input("تاریخ شروع", value=default_start_date, min_value=today - timedelta(days=30), max_value=today)
-            end_date = st.date_input("تاریخ پایان", value=today, min_value=start_date, max_value=today)
-            max_items = st.slider("حداکثر تعداد موارد", min_value=1, max_value=100, value=20)
+            start_date = st.date_input("Start date", value=default_start_date, min_value=today - timedelta(days=30), max_value=today)
+            end_date = st.date_input("End date", value=today, min_value=start_date, max_value=today)
+            max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=20)
             api_options = ["GNews", "World News API", "CoinGecko (Crypto News)", "Financial Report (FMP)", "CurrentsAPI"]
-            selected_api = st.selectbox("انتخاب API", options=api_options, index=0)
+            selected_api = st.selectbox("Select API", options=api_options, index=0)
             time_range_options = {
-                "آخرین 30 دقیقه": 0.5, "آخرین 1 ساعت": 1, "آخرین 4 ساعت": 4,
-                "آخرین 12 ساعت": 12, "آخرین 24 ساعت": 24, "همه مقالات": float("inf")
+                "Last 30 minutes": 0.5, "Last 1 hour": 1, "Last 4 hours": 4,
+                "Last 12 hours": 12, "Last 24 hours": 24, "All articles": float("inf")
             }
-            selected_time_range = st.selectbox("بازه زمانی (برای اخبار)", options=list(time_range_options.keys()), index=4)
+            selected_time_range = st.selectbox("Time range (for news)", options=list(time_range_options.keys()), index=4)
             time_range_hours = time_range_options[selected_time_range]
-            disable_time_filter = st.checkbox("غیرفعال کردن فیلتر زمانی", value=True)  # غیرفعال کردن پیش‌فرض برای تست
+            disable_time_filter = st.checkbox("Disable time filter", value=True)  # Default disabled for testing
             
-            st.header("تنظیمات ترجمه (برای اخبار)")
+            st.header("Translation Settings (for news)")
             avalai_api_url_options = ["https://api.avalai.ir/v1", "https://api.avalapis.ir/v1"]
-            st.session_state.avalai_api_url = st.selectbox("URL API Avalai", options=avalai_api_url_options, index=0)
-            enable_translation = st.checkbox("فعال کردن ترجمه", value=False)
-            num_items_to_translate = st.slider("تعداد مقالات برای ترجمه", min_value=1, max_value=max_items, value=1) if enable_translation else 1
+            st.session_state.avalai_api_url = st.selectbox("Avalai API URL", options=avalai_api_url_options, index=0)
+            enable_translation = st.checkbox("Enable translation", value=False)
+            num_items_to_translate = st.slider("Number of articles to translate", min_value=1, max_value=max_items, value=1) if enable_translation else 1
             
-            search_button = st.button("جستجو برای اخبار/گزارش")
-            clear_button = st.button("پاکسازی نتایج")
+            search_button = st.button("Search for news/reports")
+            clear_button = st.button("Clear results")
             
-            st.header("تنظیمات تلگرام")
-            telegram_chat_id = st.text_input("شناسه چت تلگرام", value="5013104607")
-            telegram_user_or_group_id = st.text_input("ارسال به کاربر/گروه", value="", help="نام کاربری @username یا @groupname را وارد کنید")
-            st.markdown(f"[شروع چت با ربات](https://t.me/YourBotUsername)", unsafe_allow_html=True)
+            st.header("Telegram Settings")
+            telegram_chat_id = st.text_input("Telegram chat ID", value="5013104607")
+            telegram_user_or_group_id = st.text_input("Send to user/group", value="", help="Enter @username or @groupname")
+            st.markdown(f"[Start chat with bot](https://t.me/YourBotUsername)", unsafe_allow_html=True)
             if st.session_state.chat_ids:
-                st.subheader("کاربران/گروه‌های شناخته‌شده")
+                st.subheader("Known Users/Groups")
                 for username, chat_id in st.session_state.chat_ids.items():
                     st.write(f"@{username}: {chat_id}")
             
-            st.header("گزینه‌های دانلود")
-            download_format = st.selectbox("فرمت دانلود", ["CSV", "JSON"])
+            st.header("Download Options")
+            download_format = st.selectbox("Download format", ["CSV", "JSON"])
         
         if clear_button:
             st.session_state.items = []
             update_selected_items("clear")
             if os.path.exists(TEMP_FILE):
                 os.remove(TEMP_FILE)
-            logger.info("پاکسازی انجام شد")
+            logger.info("Cleared results")
             st.experimental_rerun()
         
         if search_button:
-            with st.spinner(f"جستجو با استفاده از {selected_api}..."):
+            with st.spinner(f"Searching using {selected_api}..."):
                 from_date = start_date.strftime("%Y-%m-%d")
                 to_date = end_date.strftime("%Y-%m-%d")
                 fetch_query = "cryptocurrency" if selected_api == "CoinGecko (Crypto News)" else query
                 items = fetch_news(selected_api, query=fetch_query, max_records=max_items, from_date=from_date, to_date=to_date)
-                logger.info(f"پس از fetch_news، تعداد موارد: {len(items)}، موارد: {items}")
+                logger.info(f"After fetch_news, number of items: {len(items)}, items: {items}")
                 if items:
                     items = filter_articles_by_time(items, time_range_hours, start_date, end_date, disable_time_filter)
-                    logger.info(f"پس از filter_articles_by_time، تعداد موارد: {len(items)}، موارد: {items}")
+                    logger.info(f"After filter_articles_by_time, number of items: {len(items)}, items: {items}")
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation, num_items_to_translate)
-                    logger.info(f"پس از pre_process_articles، تعداد موارد: {len(items)}، موارد: {items}")
-                    st.session_state.items = items
-                    save_articles_to_file(items)
+                    logger.info(f"After pre_process_articles, number of items: {len(items)}, items: {items}")
+                    # Ensure st.session_state.items is a list
+                    st.session_state.items = list(items) if isinstance(items, (list, tuple)) else []
+                    logger.info(f"Assigned to st.session_state.items: {st.session_state.items}")
+                    save_articles_to_file(st.session_state.items)
                     update_selected_items("clear")
                 else:
                     st.session_state.items = []
-                    logger.warning("هیچ موردی دریافت نشد، st.session_state.items خالی شد")
+                    logger.warning("No items fetched, st.session_state.items cleared")
         
+        # Ensure st.session_state.items is a list before displaying
+        if not isinstance(st.session_state.items, list):
+            logger.error(f"st.session_state.items is not a list: {st.session_state.items}, type: {type(st.session_state.items)}")
+            st.session_state.items = []
         if st.session_state.items:
-            logger.info(f"st.session_state.items قبل از نمایش: {st.session_state.items}")
+            logger.info(f"st.session_state.items before display: {st.session_state.items}")
             display_items(st.session_state.items)
         else:
-            logger.warning("st.session_state.items خالی است، چیزی برای نمایش وجود ندارد")
-            st.warning("هیچ موردی برای نمایش وجود ندارد")
+            logger.warning("st.session_state.items is empty, nothing to display")
+            st.warning("No items to display")
         
         with st.sidebar:
-            st.header("اقدامات تلگرام")
-            if st.button("بازنشانی انتخاب"):
+            st.header("Telegram Actions")
+            if st.button("Reset selection"):
                 update_selected_items("clear")
-                st.success("انتخاب بازنشانی شد")
+                st.success("Selection reset")
             
             if not isinstance(st.session_state.selected_items, list):
-                logger.error(f"selected_items لیست نیست: {st.session_state.selected_items}")
+                logger.error(f"selected_items is not a list: {st.session_state.selected_items}")
                 st.session_state.selected_items = []
             selected_items_len = len(st.session_state.selected_items)
             
-            if st.button("ارسال موارد انتخاب‌شده به تلگرام", disabled=selected_items_len == 0):
-                with st.spinner("ارسال به تلگرام..."):
+            if st.button("Send selected items to Telegram", disabled=selected_items_len == 0):
+                with st.spinner("Sending to Telegram..."):
                     success_count = 0
                     fail_count = 0
                     target_chat_id = telegram_user_or_group_id if telegram_user_or_group_id else telegram_chat_id
                     if target_chat_id.startswith("@"):
                         chat_id, error = get_chat_id_from_username(target_chat_id, st.session_state.chat_ids)
                         if chat_id is None:
-                            st.error(f"خطا در رفع نام کاربری: {error}")
+                            st.error(f"Error resolving username: {error}")
                             fail_count = len(st.session_state.selected_items)
                         else:
                             target_chat_id = chat_id
@@ -810,59 +816,59 @@ def main():
                                 message = (
                                     f"*{final_title}*\n\n"
                                     f"{truncated_description}\n\n"
-                                    f"**زمان انتشار:** {tehran_time_str}\n\n"
-                                    f"**پیش‌نمایش مقاله:**\n{translated_content}\n\n"
-                                    f"[ادامه مطلب]({item['url']})"
+                                    f"**Published at:** {tehran_time_str}\n\n"
+                                    f"**Article Preview:**\n{translated_content}\n\n"
+                                    f"[Read more]({item['url']})"
                                 )
                             else:
                                 message = (
-                                    f"**گزارش مالی شرکت {item['symbol']}**\n\n"
-                                    f"**تاریخ گزارش:** {item['date']}\n"
-                                    f"**ارز گزارش:** {item['reportedCurrency']}\n"
-                                    f"**درآمد:** {item['revenue']:,} {item['reportedCurrency']}\n"
-                                    f"**سود خالص:** {item['netIncome']:,} {item['reportedCurrency']}\n"
-                                    f"**سود هر سهم (EPS):** {item['eps']}\n"
-                                    f"**سود ناخالص:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
-                                    f"**درآمد عملیاتی:** {item['operatingIncome']:,} {item['reportedCurrency']}"
+                                    f"**Financial Report for {item['symbol']}**\n\n"
+                                    f"**Report Date:** {item['date']}\n"
+                                    f"**Reported Currency:** {item['reportedCurrency']}\n"
+                                    f"**Revenue:** {item['revenue']:,} {item['reportedCurrency']}\n"
+                                    f"**Net Income:** {item['netIncome']:,} {item['reportedCurrency']}\n"
+                                    f"**Earnings Per Share (EPS):** {item['eps']}\n"
+                                    f"**Gross Profit:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
+                                    f"**Operating Income:** {item['operatingIncome']:,} {item['reportedCurrency']}"
                                 )
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=(item.get("type") != "news"))
                             if success:
                                 success_count += 1
                             else:
                                 fail_count += 1
-                                st.error(f"خطا در ارسال {item.get('title', item.get('symbol'))}: {result}")
+                                st.error(f"Error sending {item.get('title', item.get('symbol'))}: {result}")
                             time.sleep(1)
                         except Exception as e:
                             fail_count += 1
-                            st.error(f"خطا در ارسال مورد: {str(e)}")
+                            st.error(f"Error sending item: {str(e)}")
                     if success_count > 0:
-                        st.success(f"{success_count} مورد به تلگرام ارسال شد")
+                        st.success(f"{success_count} items sent to Telegram")
                     if fail_count > 0:
-                        st.warning(f"ارسال {fail_count} مورد ناموفق بود")
+                        st.warning(f"Failed to send {fail_count} items")
             else:
-                st.info(f"{selected_items_len} مورد برای ارسال به تلگرام انتخاب کنید")
+                st.info(f"Select {selected_items_len} items to send to Telegram")
         
         if st.session_state.items:
             with st.sidebar:
                 if download_format == "CSV":
                     csv_data = save_items_to_file_for_download(st.session_state.items, format="csv")
                     st.download_button(
-                        label="دانلود به‌صورت CSV", data=csv_data or b"",
+                        label="Download as CSV", data=csv_data or b"",
                         file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv"
                     )
                 else:
                     json_data = save_items_to_file_for_download(st.session_state.items, format="json")
                     st.download_button(
-                        label="دانلود به‌صورت JSON", data=json_data or b"",
+                        label="Download as JSON", data=json_data or b"",
                         file_name=f"iran_news_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json"
                     )
         
-        st.sidebar.header("لاگ‌های اخیر")
+        st.sidebar.header("Recent Logs")
         for log in log_stream[-10:]:
             st.sidebar.text(log)
     except Exception as e:
-        logger.error(f"خطا در main: {str(e)}")
-        st.error(f"خطا در main: {str(e)}")
+        logger.error(f"Error in main: {str(e)}")
+        st.error(f"Error in main: {str(e)}")
         if not isinstance(st.session_state.selected_items, list):
             st.session_state.selected_items = []
 
