@@ -43,6 +43,8 @@ CURRENTSAPI_API_URL = "https://api.currentsapi.services/v1/search"
 CURRENTSAPI_API_KEY = os.environ.get("CURRENTSAPI_API_KEY", "YOUR_CURRENTSAPI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+GOOGLE_AI_API_URL = "https://generativelanguage.googleapis.com/v1beta"
+GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY", "YOUR_GOOGLE_AI_API_KEY")
 
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
@@ -176,7 +178,7 @@ def fetch_gnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "image_url": a.get("image", ""), "translated_title": title,
                 "translated_description": description, "type": "news"
             })
-        logger.info(f"Fetched {len(formatted_articles)} articles from GNews: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from GNews")
         return formatted_articles, None
     except Exception as e:
         logger.error(f"Error fetching from GNews: {str(e)}")
@@ -221,7 +223,7 @@ def fetch_worldnews(query="Iran", max_records=20, from_date=None, to_date=None):
                 "translated_title": title, "translated_description": description,
                 "type": "news"
             })
-        logger.info(f"Fetched {len(formatted_articles)} articles from World News API: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from World News API")
         return formatted_articles, None
     except Exception as e:
         logger.error(f"Error fetching from World News API: {str(e)}")
@@ -273,7 +275,7 @@ def fetch_newsapi_crypto_news(query="cryptocurrency", max_records=20, from_date=
                 "image_url": a.get("urlToImage", ""), "translated_title": title,
                 "translated_description": description, "type": "news"
             })
-        logger.info(f"Fetched {len(formatted_articles)} articles from NewsAPI: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from NewsAPI")
         return formatted_articles, None
     except Exception as e:
         logger.error(f"Error fetching from NewsAPI: {str(e)}")
@@ -321,7 +323,7 @@ def fetch_cryptocompare_news(query="cryptocurrency", max_records=20, from_date=N
                 "type": "report"
             })
         formatted_articles = formatted_articles[:max_records]
-        logger.info(f"Fetched {len(formatted_articles)} reports from CryptoCompare: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} reports from CryptoCompare")
         return formatted_articles, None
     except Exception as e:
         logger.error(f"Error fetching from CryptoCompare: {str(e)}")
@@ -370,7 +372,7 @@ def fetch_financial_report(symbol, max_records=1, from_date=None, to_date=None):
                 "operatingIncome": report.get("operatingIncome", 0),
                 "reportedCurrency": report.get("reportedCurrency", "USD"), "type": "report"
             })
-        logger.info(f"Fetched {len(reports)} reports for {symbol}: {reports}")
+        logger.info(f"Fetched {len(reports)} reports for {symbol}")
         return reports, None
     except Exception as e:
         logger.error(f"Error fetching from FMP: {str(e)}")
@@ -415,7 +417,7 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
                 "image_url": article.get("image", ""), "translated_title": title,
                 "translated_description": description, "type": "news"
             })
-        logger.info(f"Fetched {len(formatted_articles)} articles from CurrentsAPI: {formatted_articles}")
+        logger.info(f"Fetched {len(formatted_articles)} articles from CurrentsAPI")
         return formatted_articles, None
     except Exception as e:
         logger.error(f"Error fetching from CurrentsAPI: {str(e)}")
@@ -456,8 +458,7 @@ def fetch_custom_scraped_news(max_records=20):
                 soup = BeautifulSoup(response.text, "html.parser")
                 articles = soup.find_all("article")
                 if not articles:
-                    logger.warning(f"No articles found in {source['url']} with current selectors. HTML sample: {soup.text[:200]}...")
-                    logger.info(f"Sample HTML structure: {str(soup.find('body')[:500])}...")
+                    logger.warning(f"No articles found in {source['url']} with current selectors")
                     continue
                 logger.info(f"Found {len(articles)} potential articles")
                 for article in articles[:max_records]:
@@ -516,7 +517,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
                 seen_urls = set()
                 unique_items = [item for item in items if item["url"] not in seen_urls and not seen_urls.add(item["url"])]
                 items = unique_items[:max_records]
-            logger.info(f"Fetched {len(items)} items from {selected_api}: {items}")
+            logger.info(f"Fetched {len(items)} items from {selected_api}")
             st.success(f"Fetched {len(items)} items from {selected_api}")
         else:
             logger.warning(f"No items fetched from {selected_api}")
@@ -545,14 +546,14 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "messages": [{"role": "user", "content": f"Translate this text from {source_lang} to {target_lang}: {text}"}]
     }
     try:
-        logger.info(f"Sending translation request to Avalai: {text}")
+        logger.info(f"Sending translation request to Avalai: {text[:100]}...")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Avalai response: {data}")
         if "choices" in data and data["choices"]:
             translated_text = data["choices"][0]["message"]["content"]
-            logger.info(f"Translated text: {translated_text}")
+            logger.info(f"Translated text: {translated_text[:100]}...")
             return translated_text
         logger.warning(f"Avalai API response has no choices: {data}")
         st.warning("Issue with Avalai API response")
@@ -561,6 +562,68 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         logger.error(f"Error in translation: {str(e)}")
         st.error(f"Error in translation: {str(e)}")
         return text
+
+def summarize_with_gemini(text, max_length=100):
+    if not text:
+        logger.warning("No text provided for summarization")
+        return "No content to summarize"
+    if GOOGLE_AI_API_KEY == "YOUR_GOOGLE_AI_API_KEY":
+        logger.error("Google AI API key is invalid")
+        st.error("Google AI API key is invalid")
+        return text
+
+    endpoint = f"{GOOGLE_AI_API_URL}/models/gemini-1.5-flash:generateContent?key={GOOGLE_AI_API_KEY}"
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
+    }
+    prompt = f"Summarize the following article in {max_length} words or less, focusing on the main points:\n\n{text}"
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }],
+        "generationConfig": {
+            "maxOutputTokens": max_length * 2,  # فرض می‌کنیم هر کلمه ~2 توکن
+            "temperature": 0.7
+        }
+    }
+    try:
+        logger.info(f"Sending summarization request to Gemini API")
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        logger.info(f"Gemini API response: {data}")
+        if "candidates" in data and data["candidates"]:
+            summary = data["candidates"][0]["content"]["parts"][0]["text"]
+            logger.info(f"Generated summary: {summary[:100]}...")
+            return summary
+        logger.warning(f"Gemini API response has no candidates: {data}")
+        st.warning("Issue with Gemini API response")
+        return text
+    except Exception as e:
+        logger.error(f"Error in summarization with Gemini: {str(e)}")
+        st.error(f"Error in summarization with Gemini: {str(e)}")
+        return text
+
+def extract_article_content(url):
+    try:
+        headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
+        logger.info(f"Extracting content from URL: {url}")
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        paragraphs = soup.find_all('p')
+        content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
+        if not content:
+            logger.warning(f"No content extracted from {url}")
+            return "Content not available"
+        # خلاصه‌سازی با Gemini
+        summary = summarize_with_gemini(content, max_length=100)  # خلاصه حداکثر 100 کلمه
+        logger.info(f"Extracted and summarized content: {summary[:100]}...")
+        return summary
+    except Exception as e:
+        logger.error(f"Error extracting content from {url}: {str(e)}")
+        return "Unable to extract content"
 
 def parse_to_tehran_time(utc_time_str):
     if not utc_time_str:
@@ -594,24 +657,6 @@ def truncate_text(text, max_length=100):
     except Exception as e:
         logger.error(f"Error truncating text: {str(e)}")
         return str(text)
-
-def extract_article_content(url):
-    try:
-        headers = {"User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"}
-        logger.info(f"Extracting content from URL: {url}")
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        paragraphs = soup.find_all('p')
-        content = " ".join([para.get_text(strip=True) for para in paragraphs if para.get_text(strip=True)])
-        if not content:
-            logger.warning(f"No content extracted from {url}")
-            return "Content not available"
-        logger.info(f"Extracted content: {content[:100]}...")
-        return truncate_text(content, max_length=500)
-    except Exception as e:
-        logger.error(f"Error extracting content from {url}: {str(e)}")
-        return "Unable to extract content"
 
 def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=None, disable_filter=False):
     if not items or not isinstance(items, list):
@@ -666,7 +711,7 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
         for item in sorted_items:
             item["translated_title"] = item["title"]
             item["translated_description"] = item["description"]
-        logger.info(f"Preprocessed articles: {sorted_items}")
+        logger.info(f"Preprocessed articles: {len(sorted_items)} items")
         return sorted_items
     except Exception as e:
         logger.error(f"Error preprocessing articles: {str(e)}")
@@ -676,7 +721,8 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
 def update_selected_items(action, item=None):
     if not hasattr(st.session_state, 'selected_items') or not isinstance(st.session_state.selected_items, list):
         st.session_state.selected_items = []
-        logger.info("Initialized selected_items as an empty list")
+        logger.info("Initialized selec
+ted_items as an empty list")
     if action == "add" and item:
         st.session_state.selected_items.append(item)
         logger.info(f"Adding item: {item.get('title', item.get('symbol'))}")
@@ -693,7 +739,7 @@ def display_items(items):
             logger.warning("No items to display: list is empty")
             st.warning("No items to display")
             return
-        logger.info(f"Displaying {len(items)} items: {items}")
+        logger.info(f"Displaying {len(items)} items")
         item_type = items[0].get("type", "news")
         if item_type == "news":
             sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
@@ -841,7 +887,7 @@ def main():
         
         if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
             st.session_state.articles = load_articles_from_file()
-            logger.info(f"Initialized st.session_state.articles: {st.session_state.articles}")
+            logger.info(f"Initialized st.session_state.articles: {len(st.session_state.articles)} items")
         
         if not hasattr(st.session_state, 'chat_ids'):
             st.session_state.chat_ids = load_chat_ids()
@@ -852,7 +898,7 @@ def main():
         # Initialize scrape sources
         if not hasattr(st.session_state, 'scrape_sources'):
             st.session_state.scrape_sources = load_scrape_sources()
-            logger.info(f"Initialized st.session_state.scrape_sources: {st.session_state.scrape_sources}")
+            logger.info(f"Initialized st.session_state.scrape_sources: {len(st.session_state.scrape_sources)} sources")
 
         # Add section for adding custom scrape sources
         st.header("Add Custom Scrape Sources")
@@ -932,14 +978,14 @@ def main():
                 to_date = end_date.strftime("%Y-%m-%d")
                 fetch_query = "cryptocurrency" if selected_api == "NewsAPI (Crypto News)" else query
                 items = fetch_news(selected_api, query=fetch_query, max_records=max_items, from_date=from_date, to_date=to_date)
-                logger.info(f"After fetch_news, number of items: {len(items)}, items: {items}")
+                logger.info(f"After fetch_news, number of items: {len(items)}")
                 if items:
                     items = filter_articles_by_time(items, time_range_hours, start_date, end_date, disable_time_filter)
-                    logger.info(f"After filter_articles_by_time, number of items: {len(items)}, items: {items}")
+                    logger.info(f"After filter_articles_by_time, number of items: {len(items)}")
                     items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation, num_items_to_translate)
-                    logger.info(f"After pre_process_articles, number of items: {len(items)}, items: {items}")
+                    logger.info(f"After pre_process_articles, number of items: {len(items)}")
                     st.session_state.articles = list(items) if isinstance(items, (list, tuple)) else []
-                    logger.info(f"Assigned to st.session_state.articles: {st.session_state.articles}")
+                    logger.info(f"Assigned to st.session_state.articles: {len(st.session_state.articles)} items")
                     save_articles_to_file(st.session_state.articles)
                     update_selected_items("clear")
                 else:
@@ -947,11 +993,11 @@ def main():
                     logger.warning("No items fetched, st.session_state.articles cleared")
         
         if not hasattr(st.session_state, 'articles') or not isinstance(st.session_state.articles, list):
-            logger.error(f"st.session_state.articles is not a list: {getattr(st.session_state, 'articles', None)}, type: {type(getattr(st.session_state, 'articles', None))}")
+            logger.error(f"st.session_state.articles is not a list: {getattr(st.session_state, 'articles', None)}")
             st.session_state.articles = []
         
         if st.session_state.articles:
-            logger.info(f"st.session_state.articles before display: {st.session_state.articles}")
+            logger.info(f"st.session_state.articles before display: {len(st.session_state.articles)} items")
             display_items(st.session_state.articles)
         else:
             logger.warning("st.session_state.articles is empty, nothing to display")
@@ -988,25 +1034,25 @@ def main():
                                 final_title = translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
                                 final_description = translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
                                 truncated_description = truncate_text(final_description, max_length=100)
-                                article_content = extract_article_content(item["url"])
-                                translated_content = translate_with_avalai(article_content, "en", "fa", st.session_state.avalai_api_url)
+                                article_summary = extract_article_content(item["url"])  # خلاصه توسط Gemini
+                                translated_summary = translate_with_avalai(article_summary, "en", "fa", st.session_state.avalai_api_url)
                                 message = (
                                     f"*{final_title}*\n\n"
                                     f"{truncated_description}\n\n"
-                                    f"**Published at:** {tehran_time_str}\n\n"
-                                    f"**Article Preview:**\n{translated_content}\n\n"
-                                    f"[Read more]({item['url']})"
+                                    f"**انتشار:** {tehran_time_str}\n\n"
+                                    f"**خلاصه خبر:**\n{translated_summary}\n\n"
+                                    f"[بیشتر بخوانید]({item['url']})"
                                 )
                             else:
                                 message = (
-                                    f"**Financial Report for {item['symbol']}**\n\n"
-                                    f"**Report Date:** {item['date']}\n"
-                                    f"**Reported Currency:** {item['reportedCurrency']}\n"
-                                    f"**Revenue:** {item['revenue']:,} {item['reportedCurrency']}\n"
-                                    f"**Net Income:** {item['netIncome']:,} {item['reportedCurrency']}\n"
-                                    f"**Earnings Per Share (EPS):** {item['eps']}\n"
-                                    f"**Gross Profit:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
-                                    f"**Operating Income:** {item['operatingIncome']:,} {item['reportedCurrency']}"
+                                    f"**گزارش مالی برای {item['symbol']}**\n\n"
+                                    f"**تاریخ گزارش:** {item['date']}\n"
+                                    f"**واحد پول گزارش‌شده:** {item['reportedCurrency']}\n"
+                                    f"**درآمد:** {item['revenue']:,} {item['reportedCurrency']}\n"
+                                    f"**سود خالص:** {item['netIncome']:,} {item['reportedCurrency']}\n"
+                                    f"**سود هر سهم (EPS):** {item['eps']}\n"
+                                    f"**سود ناخالص:** {item['grossProfit']:,} {item['reportedCurrency']}\n"
+                                    f"**درآمد عملیاتی:** {item['operatingIncome']:,} {item['reportedCurrency']}"
                                 )
                             success, result = send_telegram_message(target_chat_id, message, disable_web_page_preview=(item.get("type") != "news"))
                             if success:
@@ -1019,11 +1065,11 @@ def main():
                             fail_count += 1
                             st.error(f"Error sending item: {str(e)}")
                     if success_count > 0:
-                        st.success(f"{success_count} items sent to Telegram")
+                        st.success(f"{success_count} آیتم به تلگرام ارسال شد")
                     if fail_count > 0:
-                        st.warning(f"Failed to send {fail_count} items")
+                        st.warning(f"ارسال {fail_count} آیتم ناموفق بود")
             else:
-                st.info(f"Select {selected_items_len} items to send to Telegram")
+                st.info(f"{selected_items_len} آیتم برای ارسال به تلگرام انتخاب شده است")
         
         if st.session_state.articles:
             with st.sidebar:
