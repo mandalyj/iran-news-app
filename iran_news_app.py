@@ -547,7 +547,7 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
     }
     try:
         logger.info(f"Sending translation request to Avalai: {text[:100]}...")
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=30)  # تایم‌اوت افزایش یافت
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Avalai response: {data}")
@@ -588,7 +588,7 @@ def summarize_with_gemini(text, max_length=100):
         }
     }
     try:
-        logger.info(f"Sending summarization request to Gemini API")
+        logger.info(f"Sending summarization request to Gemini API with model gemini-1.5-flash")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=15)
         response.raise_for_status()
         data = response.json()
