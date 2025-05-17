@@ -1,5 +1,6 @@
-streamlit>=1.38.0
-pandas>=2.1.1
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-feedparser
+streamlit>=1.38.0 
+pandas>=2.1.1 
+requests>=2.31.0 
+beautifulsoup4>=4.12.0 
+feedparser 
+cohere>=5.11.0
