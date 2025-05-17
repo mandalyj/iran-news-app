@@ -528,7 +528,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
         st.error(f"Error in fetch_news: {str(e)}")
         return []
 
-def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT):
+def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_url=AVALAI_API_URL_DEFAULT, model="gpt-4.1-nano"):
     if not text:
         return text
     if AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
@@ -541,26 +541,32 @@ def translate_with_avalai(text, source_lang="en", target_lang="fa", avalai_api_u
         "Content-Type": "application/json",
         "User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
     }
-    payload = {
-        "model": "gpt-4.1-nano",
-        "messages": [{"role": "user", "content": f"Translate this text from {source_lang} to {target_lang}: {text}"}]
-    }
+    if model == "cohere.rerank-v3-5:0":
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": f"Rank the following documents based on the query: {text}"}]
+        }
+    else:
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": f"Translate this text from {source_lang} to {target_lang}: {text}"}]
+        }
     try:
-        logger.info(f"Sending translation request to Avalai: {text[:100]}...")
+        logger.info(f"Sending request to Avalai with model {model}: {text[:100]}...")
         response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
         response.raise_for_status()
         data = response.json()
         logger.info(f"Avalai response: {data}")
         if "choices" in data and data["choices"]:
             translated_text = data["choices"][0]["message"]["content"]
-            logger.info(f"Translated text: {translated_text[:100]}...")
+            logger.info(f"Processed text with {model}: {translated_text[:100]}...")
             return translated_text
         logger.warning(f"Avalai API response has no choices: {data}")
-        st.warning("Issue with Avalai API response: No translation returned.")
+        st.warning("Issue with Avalai API response: No result returned.")
         return text
     except Exception as e:
-        logger.error(f"Error in translation: {str(e)}")
-        st.error(f"Error in translation: {str(e)}. Falling back to original text.")
+        logger.error(f"Error in processing with Avalai: {str(e)}")
+        st.error(f"Error in processing with Avalai: {str(e)}. Falling back to original text.")
         return text
 
 def summarize_with_gemini(text, max_length=100):
@@ -583,7 +589,7 @@ def summarize_with_gemini(text, max_length=100):
             "parts": [{"text": prompt}]
         }],
         "generationConfig": {
-            "maxOutputTokens": max_length * 2,  # فرض می‌کنیم هر کلمه ~2 توکن
+            "maxOutputTokens": max_length * 2,
             "temperature": 0.7
         }
     }
@@ -617,13 +623,45 @@ def extract_article_content(url):
         if not content:
             logger.warning(f"No content extracted from {url}")
             return "Content not available"
-        # خلاصه‌سازی با Gemini
-        summary = summarize_with_gemini(content, max_length=100)  # خلاصه حداکثر 100 کلمه
+        summary = summarize_with_gemini(content, max_length=100)
         logger.info(f"Extracted and summarized content: {summary[:100]}...")
         return summary
     except Exception as e:
         logger.error(f"Error extracting content from {url}: {str(e)}")
         return "Unable to extract content"
+
+def rerank_articles_with_avalai(query, items):
+    if not items or not isinstance(items, list):
+        logger.warning("No articles to rerank")
+        return items
+    if AVALAI_API_KEY == "YOUR_AVALAI_API_KEY":
+        logger.error("Avalai API key is invalid")
+        st.error("Avalai API key is invalid. Please set the AVALAI_API_KEY environment variable.")
+        return items
+
+    try:
+        # آماده‌سازی اسناد برای رتبه‌بندی (ترکیب تیتر و دیسکریپشن)
+        documents = [f"{item['title']} {item['description']}" for item in items]
+        logger.info(f"Sending {len(documents)} documents to Avalai for reranking with query: {query}")
+        
+        # ارسال درخواست به AvalAI با مدل cohere.rerank-v3-5:0
+        response_text = translate_with_avalai(json.dumps({"query": query, "documents": documents}), model="cohere.rerank-v3-5:0")
+        
+        # فرض می‌کنیم پاسخ یک لیست از شاخص‌ها یا اسناد رتبه‌بندی‌شده است
+        try:
+            response_data = json.loads(response_text)
+            reranked_indices = response_data.get("indices", list(range(len(items))))
+            reranked_items = [items[i] for i in reranked_indices]
+            logger.info(f"Reranked {len(reranked_items)} articles using Avalai with cohere.rerank-v3-5:0")
+            return reranked_items
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON response from Avalai for reranking: {response_text}")
+            return items
+
+    except Exception as e:
+        logger.error(f"Error in reranking with Avalai: {str(e)}")
+        st.error(f"Error in reranking with Avalai: {str(e)}. Falling back to original order.")
+        return items
 
 def parse_to_tehran_time(utc_time_str):
     if not utc_time_str:
@@ -698,7 +736,7 @@ def filter_articles_by_time(items, time_range_hours, start_date=None, end_date=N
         st.error(f"Error filtering articles: {str(e)}")
         return items
 
-def pre_process_articles(items, avalai_api_url, enable_translation=False, num_items_to_translate=1):
+def pre_process_articles(items, query, avalai_api_url, enable_translation=False, num_items_to_translate=1, enable_reranking=True):
     if not items or not isinstance(items, list):
         logger.warning("Article list for preprocessing is empty")
         return []
@@ -706,13 +744,23 @@ def pre_process_articles(items, avalai_api_url, enable_translation=False, num_it
         logger.info("Articles are reports, preprocessing not applied")
         return items
     try:
-        sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
-        logger.info(f"Sorted articles: {len(sorted_items)} items")
-        for item in sorted_items:
-            item["translated_title"] = item["title"]
-            item["translated_description"] = item["description"]
-        logger.info(f"Preprocessed articles: {len(sorted_items)} items")
-        return sorted_items
+        # رتبه‌بندی مقالات با Avalai (در صورت فعال بودن)
+        if enable_reranking:
+            logger.info("Reranking articles with Avalai")
+            items = rerank_articles_with_avalai(query, items)
+        else:
+            # مرتب‌سازی بر اساس زمان (مانند قبل)
+            items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
+            logger.info(f"Sorted articles by time: {len(items)} items")
+
+        # ترجمه تیتر و دیسکریپشن (در صورت فعال بودن)
+        if enable_translation:
+            for i, item in enumerate(items[:num_items_to_translate]):
+                item["translated_title"] = translate_with_avalai(item["title"], "en", "fa", avalai_api_url)
+                item["translated_description"] = translate_with_avalai(item["description"], "en", "fa", avalai_api_url)
+
+        logger.info(f"Preprocessed articles: {len(items)} items")
+        return items
     except Exception as e:
         logger.error(f"Error preprocessing articles: {str(e)}")
         st.error(f"Error preprocessing articles: {str(e)}")
@@ -741,10 +789,8 @@ def display_items(items):
         logger.info(f"Displaying {len(items)} items")
         item_type = items[0].get("type", "news")
         if item_type == "news":
-            sorted_items = sorted(items, key=lambda x: parse_to_tehran_time(x["published_at"]) or datetime.min, reverse=True)
-            logger.info(f"Sorted articles for display: {len(sorted_items)} items")
             st.subheader("News Statistics")
-            sources = pd.DataFrame([item["source"] for item in sorted_items]).value_counts().reset_index()
+            sources = pd.DataFrame([item["source"] for item in items]).value_counts().reset_index()
             sources.columns = ["Source", "Count"]
             if len(sources) > 1:
                 col1, col2 = st.columns(2)
@@ -763,7 +809,7 @@ def display_items(items):
             
             st.subheader("News Articles")
             col1, col2 = st.columns(2)
-            for i, item in enumerate(sorted_items):
+            for i, item in enumerate(items):
                 current_col = col1 if i % 2 == 0 else col2
                 with current_col:
                     st.markdown('<div class="neon-line-top"></div>', unsafe_allow_html=True)
@@ -780,6 +826,12 @@ def display_items(items):
                     st.markdown(f'<div class="article-section">', unsafe_allow_html=True)
                     st.markdown(f'<h3 class="title-link"><a href="{item["url"]}" target="_blank">{item["title"]}</a></h3>', unsafe_allow_html=True)
                     st.markdown(f'<div class="source-date">**Source:** {item["source"]} | **Published:** {tehran_time_str}</div>', unsafe_allow_html=True)
+                    if item.get("translated_title"):
+                        st.markdown(f'<div class="persian-text">**تیتر (فارسی):** {item["translated_title"]}</div>', unsafe_allow_html=True)
+                    if item.get("translated_description"):
+                        st.markdown(f'<div class="persian-text description">**توضیحات (فارسی):** {truncate_text(item["translated_description"], max_length=100)}</div>', unsafe_allow_html=True)
+                    if "relevance_score" in item:
+                        st.markdown(f'<div class="source-date">**Relevance Score:** {item["relevance_score"]:.2f}</div>', unsafe_allow_html=True)
                     if item["image_url"]:
                         try:
                             st.image(item["image_url"], width=300)
@@ -822,7 +874,6 @@ def save_items_to_file_for_download(items, format="csv"):
         return None
 
 def clean_markdown_text(text):
-    # حذف یا فرار کردن کاراکترهای خاص که ممکن است در Markdown مشکل ایجاد کنند
     text = text.replace("*", "\\*").replace("_", "\\_").replace("[", "\\[").replace("]", "\\]")
     return text
 
@@ -830,7 +881,7 @@ def send_telegram_message(chat_id, message, disable_web_page_preview=False):
     try:
         if len(message) > 4096:
             message = message[:4093] + "..."
-        message = clean_markdown_text(message)  # پاکسازی پیام برای Markdown
+        message = clean_markdown_text(message)
         url = f"{TELEGRAM_API_URL}/sendMessage"
         data = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": disable_web_page_preview}
         logger.info(f"Sending message to Telegram: {chat_id}")
@@ -954,6 +1005,9 @@ def main():
             enable_translation = st.checkbox("Enable translation", value=False)
             num_items_to_translate = st.slider("Number of articles to translate", min_value=1, max_value=max_items, value=1) if enable_translation else 1
             
+            st.header("Ranking Settings")
+            enable_reranking = st.checkbox("Enable article reranking with Avalai", value=True)
+            
             search_button = st.button("Search for news/reports")
             clear_button = st.button("Clear results")
             
@@ -987,7 +1041,7 @@ def main():
                 if items:
                     items = filter_articles_by_time(items, time_range_hours, start_date, end_date, disable_time_filter)
                     logger.info(f"After filter_articles_by_time, number of items: {len(items)}")
-                    items = pre_process_articles(items, st.session_state.avalai_api_url, enable_translation, num_items_to_translate)
+                    items = pre_process_articles(items, query, st.session_state.avalai_api_url, enable_translation, num_items_to_translate, enable_reranking)
                     logger.info(f"After pre_process_articles, number of items: {len(items)}")
                     st.session_state.articles = list(items) if isinstance(items, (list, tuple)) else []
                     logger.info(f"Assigned to st.session_state.articles: {len(st.session_state.articles)} items")
@@ -1036,10 +1090,10 @@ def main():
                             if item.get("type") == "news":
                                 tehran_time = parse_to_tehran_time(item["published_at"])
                                 tehran_time_str = format_tehran_time(tehran_time) if tehran_time else item["published_at"]
-                                final_title = translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url)
-                                final_description = translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url)
+                                final_title = item.get("translated_title", translate_with_avalai(item["title"], "en", "fa", st.session_state.avalai_api_url))
+                                final_description = item.get("translated_description", translate_with_avalai(item["description"], "en", "fa", st.session_state.avalai_api_url))
                                 truncated_description = truncate_text(final_description, max_length=100)
-                                article_summary = extract_article_content(item["url"])  # خلاصه توسط Gemini
+                                article_summary = extract_article_content(item["url"])
                                 translated_summary = translate_with_avalai(article_summary, "en", "fa", st.session_state.avalai_api_url)
                                 message = (
                                     f"*{final_title}*\n\n"
