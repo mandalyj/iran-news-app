@@ -51,7 +51,6 @@ GOOGLE_AI_API_KEY = os.environ.get("GOOGLE_AI_API_KEY", "YOUR_GOOGLE_AI_API_KEY"
 
 TEMP_FILE = "/tmp/iran_news_articles.json"
 CHAT_IDS_FILE = "/tmp/iran_news_chat_ids.json"
-SCRAPE_SOURCES_FILE = "/tmp/scrape_sources.json"
 
 # Headers for Avalai API requests
 AVALAI_HEADERS = {
@@ -59,28 +58,6 @@ AVALAI_HEADERS = {
     "Content-Type": "application/json",
     "User-Agent": "IranNewsAggregator/1.0 (Contact: avestaparsavic@gmail.com)"
 }
-
-# بارگذاری منابع اسکرپ از فایل
-def load_scrape_sources():
-    try:
-        if os.path.exists(SCRAPE_SOURCES_FILE):
-            with open(SCRAPE_SOURCES_FILE, "r") as f:
-                data = json.load(f)
-                logger.info(f"Loaded {len(data)} scrape sources from {SCRAPE_SOURCES_FILE}")
-                return data
-        logger.info(f"File {SCRAPE_SOURCES_FILE} does not exist")
-        return []
-    except Exception as e:
-        logger.error(f"Error loading scrape sources: {str(e)}")
-        return []
-
-def save_scrape_sources(sources):
-    try:
-        with open(SCRAPE_SOURCES_FILE, "w") as f:
-            json.dump(sources, f)
-        logger.info(f"Saved {len(sources)} scrape sources to {SCRAPE_SOURCES_FILE}")
-    except Exception as e:
-        logger.error(f"Error saving scrape sources: {str(e)}")
 
 # Streamlit page configuration
 st.set_page_config(page_title="Iran News Aggregator", page_icon="📰", layout="wide")
@@ -434,68 +411,6 @@ def fetch_currentsapi_news(query="Iran", max_records=20, from_date=None, to_date
         st.error(f"Error fetching from CurrentsAPI: {str(e)}")
         return [], str(e)
 
-def fetch_custom_scraped_news(max_records=20):
-    scrape_sources = st.session_state.scrape_sources
-    news_items = []
-    for source in scrape_sources:
-        logger.info(f"Processing source: {source['name']} ({source['url']}, type: {source['type']})")
-        try:
-            if source["type"] == "rss":
-                logger.info(f"Attempting to parse RSS feed from {source['url']}")
-                feed = feedparser.parse(source["url"])
-                if feed.bozo:
-                    logger.error(f"RSS feed error for {source['name']}: {feed.bozo_exception}")
-                    continue
-                if not feed.entries:
-                    logger.warning(f"No entries found in RSS feed for {source['name']}")
-                    continue
-                for entry in feed.entries[:max_records]:
-                    title = entry.get("title", "No title")
-                    description = entry.get("summary", "") or entry.get("description", "") or "No description"
-                    news_items.append({
-                        "title": title, "url": entry.get("link", ""),
-                        "published_at": entry.get("published", datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")),
-                        "description": description, "image_url": entry.get("media_thumbnail", [{}])[0].get("url", ""),
-                        "translated_title": title, "translated_description": description,
-                        "source": source["name"], "type": "news"
-                    })
-                    logger.info(f"Successfully parsed RSS entry: {entry.get('title')}")
-            elif source["type"] == "web":
-                logger.info(f"Attempting to scrape web content from {source['url']}")
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                response = requests.get(source["url"], timeout=10, headers=headers)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, "html.parser")
-                articles = soup.find_all("article")
-                if not articles:
-                    logger.warning(f"No articles found in {source['url']} with current selectors")
-                    continue
-                logger.info(f"Found {len(articles)} potential articles")
-                for article in articles[:max_records]:
-                    title_elem = article.find("h2")
-                    title = title_elem.text.strip() if title_elem else "No title"
-                    description_elem = article.find("p")
-                    description = description_elem.text.strip() if description_elem else "No description"
-                    link_elem = article.find("a", href=True)
-                    article_url = (
-                        link_elem["href"] if link_elem and link_elem["href"].startswith("http") else
-                        source["url"].rstrip("/") + "/" + link_elem["href"].lstrip("/") if link_elem else
-                        source["url"]
-                    )
-                    image_elem = article.find("img", src=True)
-                    image_url = image_elem["src"] if image_elem else ""
-                    news_items.append({
-                        "title": title, "url": article_url,
-                        "published_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "description": description, "image_url": image_url,
-                        "translated_title": title, "translated_description": description,
-                        "source": source["name"], "type": "news"
-                    })
-                    logger.info(f"Successfully scraped article: {title}")
-        except Exception as e:
-            logger.error(f"Error scraping {source['name']} ({source['url']}): {str(e)}")
-    return news_items[:max_records]
-
 def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_date=None):
     try:
         logger.info(f"Fetching from {selected_api}: query={query}, max_records={max_records}, from_date={from_date}, to_date={to_date}")
@@ -505,8 +420,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             "NewsAPI (Crypto News)": fetch_newsapi_crypto_news,
             "CryptoCompare (Crypto Reports)": fetch_cryptocompare_news,
             "Financial Report (FMP)": fetch_financial_report,
-            "CurrentsAPI": fetch_currentsapi_news,
-            "Custom Scraped News": fetch_custom_scraped_news
+            "CurrentsAPI": fetch_currentsapi_news
         }
         fetch_function = api_functions.get(selected_api)
         if not fetch_function:
@@ -514,7 +428,7 @@ def fetch_news(selected_api, query="Iran", max_records=20, from_date=None, to_da
             st.error(f"Invalid API: {selected_api}")
             return []
         fetch_query = query if selected_api not in ["Financial Report (FMP)", "CryptoCompare (Crypto Reports)"] else query.upper()
-        items, error = fetch_function(fetch_query, max_records, from_date, to_date) if selected_api != "Custom Scraped News" else (fetch_function(max_records), None)
+        items, error = fetch_function(fetch_query, max_records, from_date, to_date)
         if not isinstance(items, list):
             logger.error(f"Did not receive a list: {items}")
             st.error("Did not receive a list")
@@ -634,8 +548,9 @@ def extract_article_content(url):
             logger.warning(f"No content extracted from {url}")
             return "Content not available"
         summary = summarize_with_gemini(content, max_length=100)
-        logger.info(f"Extracted and summarized content: {summary[:100]}...")
-        return summary
+        translated_summary = translate_with_avalai(summary, "en", "fa")
+        logger.info(f"Extracted, summarized, and translated content: {translated_summary[:100]}...")
+        return translated_summary
     except Exception as e:
         logger.error(f"Error extracting content from {url}: {str(e)}")
         return "Unable to extract content"
@@ -971,36 +886,6 @@ def main():
         
         if not hasattr(st.session_state, 'chat_ids'):
             st.session_state.chat_ids = load_chat_ids()
-        
-        # Initialize scrape sources
-        if not hasattr(st.session_state, 'scrape_sources'):
-            st.session_state.scrape_sources = load_scrape_sources()
-            logger.info(f"Initialized st.session_state.scrape_sources: {len(st.session_state.scrape_sources)} sources")
-
-        # Add section for adding custom scrape sources
-        st.header("Add Custom Scrape Sources")
-        with st.form(key="scrape_form"):
-            source_name = st.text_input("Source Name", value="")
-            source_url = st.text_input("Source URL", value="")
-            source_type = st.selectbox("Source Type", options=["web", "rss"], index=0)
-            submit_button = st.form_submit_button(label="Add Source")
-            if submit_button and source_name and source_url:
-                new_source = {"name": source_name, "url": source_url, "type": source_type}
-                st.session_state.scrape_sources.append(new_source)
-                save_scrape_sources(st.session_state.scrape_sources)
-                st.success(f"Added {source_name} to scrape sources")
-                st.rerun()
-
-        st.subheader("Current Scrape Sources")
-        if st.session_state.scrape_sources:
-            for i, source in enumerate(st.session_state.scrape_sources):
-                st.write(f"{i + 1}. {source['name']} - {source['url']} ({source['type']})")
-                if st.button("Remove", key=f"remove_source_{i}"):
-                    st.session_state.scrape_sources.pop(i)
-                    save_scrape_sources(st.session_state.scrape_sources)
-                    st.rerun()
-        else:
-            st.info("No scrape sources added yet.")
 
         with st.sidebar:
             st.header("Search Settings")
@@ -1009,8 +894,8 @@ def main():
             one_year_ago = today - timedelta(days=365)
             start_date = st.date_input("Start date", value=one_year_ago, min_value=one_year_ago, max_value=today)
             end_date = st.date_input("End date", value=today, min_value=one_year_ago, max_value=today)
-            max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=20)
-            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "CryptoCompare (Crypto Reports)", "Financial Report (FMP)", "CurrentsAPI", "Custom Scraped News"]
+            max_items = st.slider("Maximum number of items", min_value=1, max_value=100, value=1)
+            api_options = ["GNews", "World News API", "NewsAPI (Crypto News)", "CryptoCompare (Crypto Reports)", "Financial Report (FMP)", "CurrentsAPI"]
             selected_api = st.selectbox("Select API", options=api_options, index=0)
             time_range_options = {
                 "Last 30 minutes": 0.5, "Last 1 hour": 1, "Last 4 hours": 4,
@@ -1018,14 +903,14 @@ def main():
             }
             selected_time_range = st.selectbox("Time range (for news)", options=list(time_range_options.keys()), index=4)
             time_range_hours = time_range_options[selected_time_range]
-            disable_time_filter = st.checkbox("Disable time filter", value=True)
+            disable_time_filter = st.checkbox("Disable time filter", value=False)
             
             st.header("Translation Settings (for news)")
             enable_translation = st.checkbox("Enable translation", value=False)
             num_items_to_translate = st.slider("Number of articles to translate", min_value=1, max_value=max_items, value=1) if enable_translation else 1
             
             st.header("Ranking Settings")
-            enable_reranking = st.checkbox("Enable article reranking with Avalai", value=True)
+            enable_reranking = st.checkbox("Enable article reranking with Avalai", value=False)
             
             search_button = st.button("Search for news/reports")
             clear_button = st.button("Clear results")
@@ -1122,14 +1007,11 @@ def main():
                                         translated_description = item["description"]
                                 truncated_description = truncate_text(translated_description, max_length=100)
                                 article_summary = extract_article_content(item["url"])
-                                translated_summary = article_summary
-                                if enable_translation:
-                                    translated_summary = translate_with_avalai(article_summary, "en", "fa")
                                 message = (
                                     f"*{translated_title}*\n\n"
                                     f"{truncated_description}\n\n"
                                     f"**انتشار:** {tehran_time_str}\n\n"
-                                    f"**خلاصه خبر:**\n{translated_summary}\n\n"
+                                    f"**خلاصه خبر:**\n{article_summary}\n\n"
                                     f"[بیشتر بخوانید]({item['url']})"
                                 )
                             else:
