@@ -3,7 +3,7 @@ services:
     name: iran-news-aggregator
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run iran_news_app.py --server.port $PORT --server.address 0.0.0.0
+    startCommand: streamlit run translate_app.py --server.port 10000 --server.address 0.0.0.0
     plan: free
     envVars:
       - key: PYTHON_VERSION
