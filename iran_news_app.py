@@ -8,6 +8,20 @@ import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Store logs in memory for display in the UI
+log_stream = []
+
+# Custom LogHandler to store logs in log_stream
+class LogHandler(logging.Handler):
+    def emit(self, record):
+        log_entry = self.format(record)
+        log_stream.append(log_entry)
+
+# Add the custom LogHandler to the logger
+log_handler = LogHandler()
+log_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logger.addHandler(log_handler)
+
 # Load API Key and base URLs from environment variables or defaults
 AVALAI_API_KEY = os.environ.get("AVALAI_API_KEY", "YOUR_AVALAI_API_KEY")
 BASE_URLS = [
@@ -97,8 +111,8 @@ def main():
 
     # Display logs in the sidebar
     st.sidebar.header("Recent Logs")
-    for record in logging.getLogger().handlers[0].records[-10:]:
-        st.sidebar.text(f"{record.asctime} - {record.levelname} - {record.message}")
+    for log in log_stream[-10:]:
+        st.sidebar.text(log)
 
 if __name__ == "__main__":
     main()
